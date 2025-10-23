@@ -1,1 +1,7 @@
 project_id = "vljagrtdnaqmoppcjjsf"
+
+[functions.ai-route-suggestions]
+verify_jwt = false
+
+[functions.ai-training-insights]
+verify_jwt = false

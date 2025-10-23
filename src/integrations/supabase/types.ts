@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      challenge_participants: {
+        Row: {
+          challenge_id: string
+          completed: boolean | null
+          id: string
+          joined_at: string
+          progress: number | null
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed?: boolean | null
+          id?: string
+          joined_at?: string
+          progress?: number | null
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed?: boolean | null
+          id?: string
+          joined_at?: string
+          progress?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_participants_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          challenge_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string
+          id: string
+          is_public: boolean | null
+          name: string
+          start_date: string
+          target_value: number
+        }
+        Insert: {
+          challenge_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          is_public?: boolean | null
+          name: string
+          start_date: string
+          target_value: number
+        }
+        Update: {
+          challenge_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          start_date?: string
+          target_value?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -55,6 +129,35 @@ export type Database = {
           weight_kg?: number | null
         }
         Relationships: []
+      }
+      route_likes: {
+        Row: {
+          created_at: string
+          id: string
+          route_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          route_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          route_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_likes_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       routes: {
         Row: {
@@ -134,6 +237,27 @@ export type Database = {
           session_date?: string
           source?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_relationships: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
         }
         Relationships: []
       }

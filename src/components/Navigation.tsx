@@ -55,6 +55,13 @@ export const Navigation = () => {
                   <span className="hidden sm:inline">{t('nav.training')}</span>
                 </Link>
                 <Link 
+                  to="/community" 
+                  className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="hidden sm:inline">Community</span>
+                </Link>
+                <Link 
                   to="/profile" 
                   className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
                 >

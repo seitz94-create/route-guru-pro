@@ -21,21 +21,21 @@ serve(async (req) => {
 
     const systemPrompt = `You are an expert cycling route planner. Generate personalized cycling route suggestions based on user preferences.
     
-    Consider:
-    - Distance and elevation preferences
-    - Terrain type (road, gravel, mountain)
-    - User's fitness level and experience
-    - Starting location
-    - Preferred direction and road types
-    - Weather and season considerations
+    Return a JSON array with exactly 3 route objects. Each route must have this exact structure:
+    {
+      "name": "Route name",
+      "description": "Brief description of the route and what makes it special",
+      "distance": number (km),
+      "elevation": number (m),
+      "difficulty": "Easy" | "Moderate" | "Hard" | "Expert",
+      "estimatedTime": "e.g., 2-3 hours",
+      "highlights": ["Point 1", "Point 2", "Point 3"],
+      "safetyNotes": "Important safety considerations",
+      "startPoint": "Starting location name",
+      "terrain": "road" | "gravel" | "mtb" | "mixed"
+    }
     
-    Provide 3 diverse route options with:
-    - Name and description
-    - Distance (km) and elevation gain (m)
-    - Difficulty rating
-    - Estimated time
-    - Highlights and points of interest
-    - Safety notes`;
+    Only return valid JSON array, no markdown formatting.`;
 
     const userPrompt = `Generate route suggestions for:
     Distance: ${preferences.distance}km
@@ -87,9 +87,15 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const suggestions = data.choices[0].message.content;
+    let suggestions = data.choices[0].message.content;
+    
+    // Clean up markdown formatting if present
+    suggestions = suggestions.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    // Parse the JSON to validate it
+    const routes = JSON.parse(suggestions);
 
-    return new Response(JSON.stringify({ suggestions }), {
+    return new Response(JSON.stringify({ routes }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

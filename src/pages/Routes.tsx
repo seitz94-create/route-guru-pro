@@ -9,7 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Download, Send, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import RouteCard from '@/components/RouteCard';
 
 const Routes = () => {
   const { t } = useLanguage();
@@ -20,7 +21,7 @@ const Routes = () => {
   const [roadType, setRoadType] = useState('mixed');
   const [avoidTraffic, setAvoidTraffic] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState('');
+  const [routes, setRoutes] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ const Routes = () => {
 
   const handleFindRoutes = async () => {
     setSearching(true);
-    setAiSuggestions('');
+    setRoutes([]);
     
     try {
       const { data, error } = await supabase.functions.invoke('ai-route-suggestions', {
@@ -65,8 +66,8 @@ const Routes = () => {
         return;
       }
 
-      setAiSuggestions(data.suggestions);
-      toast.success('AI-powered route suggestions ready!');
+      setRoutes(data.routes || []);
+      toast.success(`Found ${data.routes?.length || 0} personalized routes!`);
     } catch (error: any) {
       console.error('Error getting route suggestions:', error);
       toast.error('Failed to generate route suggestions. Please try again.');
@@ -175,22 +176,19 @@ const Routes = () => {
             </CardContent>
           </Card>
           
-          {aiSuggestions && (
-            <Card className="mb-8 shadow-elevated">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  AI Route Recommendations
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <div className="whitespace-pre-wrap text-muted-foreground">
-                    {aiSuggestions}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {routes.length > 0 && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                <h2 className="text-2xl font-bold">AI-Powered Route Suggestions</h2>
+              </div>
+              
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {routes.map((route, index) => (
+                  <RouteCard key={index} route={route} />
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

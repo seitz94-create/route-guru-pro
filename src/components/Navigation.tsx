@@ -29,57 +29,62 @@ export const Navigation = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
+    <nav className="sticky top-0 left-0 right-0 z-50 bg-background/98 backdrop-blur-md border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2 font-bold text-xl text-primary hover:opacity-80 transition-opacity">
-            <Bike className="w-6 h-6" />
-            <span>CyclePro</span>
+          <Link to="/" className="flex items-center gap-2 font-bold text-lg text-foreground hover:text-primary transition-colors">
+            <Bike className="w-6 h-6 text-primary" />
+            <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              TrainingPartner
+            </span>
           </Link>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1 md:gap-4">
+            <Link 
+              to="/" 
+              className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
+              Home
+            </Link>
+            <Link 
+              to="/routes" 
+              className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
+              <span className="hidden md:inline">Find Rute</span>
+              <span className="md:hidden">Ruter</span>
+            </Link>
             {user && (
               <>
                 <Link 
-                  to="/routes" 
-                  className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
-                >
-                  <Route className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t('nav.routes')}</span>
-                </Link>
-                <Link 
                   to="/training" 
-                  className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
                 >
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t('nav.training')}</span>
+                  <span className="hidden md:inline">Træningspartner</span>
+                  <span className="md:hidden">Træning</span>
                 </Link>
                 <Link 
                   to="/community" 
-                  className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
                 >
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:inline">Community</span>
+                  Community
                 </Link>
                 <Link 
                   to="/profile" 
-                  className="flex items-center gap-2 text-foreground hover:text-primary transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
                 >
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t('nav.profile')}</span>
+                  Profil
+                </Link>
+                <Link 
+                  to="/subscription" 
+                  className="px-3 py-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  <span className="hidden md:inline">Abonnement</span>
+                  <span className="md:hidden">Pro</span>
                 </Link>
               </>
             )}
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLanguage('en')}
-                className={language === 'en' ? 'bg-muted' : ''}
-              >
-                🇬🇧
-              </Button>
+            <div className="flex items-center gap-1 ml-2 border-l border-border pl-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -88,15 +93,23 @@ export const Navigation = () => {
               >
                 🇩🇰
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLanguage('en')}
+                className={language === 'en' ? 'bg-muted' : ''}
+              >
+                🇬🇧
+              </Button>
             </div>
 
             {user ? (
-              <Button onClick={handleLogout} variant="outline" size="sm">
-                {t('nav.logout')}
+              <Button onClick={handleLogout} variant="outline" size="sm" className="ml-2">
+                Log ud
               </Button>
             ) : (
-              <Button onClick={() => navigate('/auth')} size="sm">
-                {t('nav.login')}
+              <Button onClick={() => navigate('/auth')} size="sm" className="ml-2 bg-primary text-primary-foreground hover:bg-primary-hover">
+                Log ind
               </Button>
             )}
           </div>

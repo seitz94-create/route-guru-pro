@@ -10,11 +10,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Users, Trophy, Heart, Search } from 'lucide-react';
 
+interface LeaderboardEntry {
+  user_id: string;
+  full_name: string;
+  total_distance: number;
+  total_elevation: number;
+  total_rides: number;
+  points: number;
+}
+
 const Community = () => {
   const { t } = useLanguage();
   const [user, setUser] = useState<any>(null);
   const [challenges, setChallenges] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,7 +39,7 @@ const Community = () => {
 
   const loadData = async () => {
     try {
-      const [challengesRes, friendsRes] = await Promise.all([
+      const [challengesRes, friendsRes, sessionsRes] = await Promise.all([
         supabase
           .from('challenges')
           .select('*, challenge_participants(count)')
@@ -38,11 +48,54 @@ const Community = () => {
         supabase
           .from('user_relationships')
           .select('following_id, profiles!user_relationships_following_id_fkey(full_name)')
-          .eq('follower_id', user?.id || '')
+          .eq('follower_id', user?.id || ''),
+        supabase
+          .from('training_sessions')
+          .select('user_id, distance_km, elevation_m, profiles(full_name)')
       ]);
 
       if (challengesRes.data) setChallenges(challengesRes.data);
       if (friendsRes.data) setFriends(friendsRes.data);
+      
+      // Calculate leaderboard
+      if (sessionsRes.data) {
+        const userStats = new Map<string, LeaderboardEntry>();
+        
+        sessionsRes.data.forEach((session: any) => {
+          const userId = session.user_id;
+          if (!userStats.has(userId)) {
+            userStats.set(userId, {
+              user_id: userId,
+              full_name: session.profiles?.full_name || 'Anonymous',
+              total_distance: 0,
+              total_elevation: 0,
+              total_rides: 0,
+              points: 0
+            });
+          }
+          
+          const stats = userStats.get(userId)!;
+          stats.total_distance += Number(session.distance_km || 0);
+          stats.total_elevation += Number(session.elevation_m || 0);
+          stats.total_rides += 1;
+          
+          // Points calculation:
+          // 1 point per km
+          // 5 points per 100m elevation
+          // 10 points per ride completed
+          stats.points = Math.round(
+            stats.total_distance + 
+            (stats.total_elevation / 100) * 5 + 
+            stats.total_rides * 10
+          );
+        });
+        
+        const sortedLeaderboard = Array.from(userStats.values())
+          .sort((a, b) => b.points - a.points)
+          .slice(0, 50);
+        
+        setLeaderboard(sortedLeaderboard);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -77,8 +130,12 @@ const Community = () => {
         <div className="max-w-6xl mx-auto">
           <h1 className="text-4xl font-bold mb-8 text-foreground">Community</h1>
           
-          <Tabs defaultValue="challenges" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs defaultValue="leaderboard" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="leaderboard">
+                <Trophy className="w-4 h-4 mr-2" />
+                Rangliste
+              </TabsTrigger>
               <TabsTrigger value="challenges">
                 <Trophy className="w-4 h-4 mr-2" />
                 Challenges
@@ -92,6 +149,62 @@ const Community = () => {
                 Popular Routes
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="leaderboard" className="space-y-4">
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="w-6 h-6 text-primary" />
+                    Top 50 Cyklister
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Point system: 1 point pr. km + 5 point pr. 100m stigning + 10 point pr. tur
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {leaderboard.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Ingen data endnu. Start med at køre!
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {leaderboard.map((entry, index) => (
+                        <div 
+                          key={entry.user_id} 
+                          className={`flex items-center gap-4 p-4 rounded-lg border ${
+                            index === 0 ? 'bg-primary/10 border-primary' :
+                            index === 1 ? 'bg-secondary/10 border-secondary' :
+                            index === 2 ? 'bg-accent/10 border-accent' :
+                            'bg-muted/50'
+                          }`}
+                        >
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                            index === 0 ? 'bg-primary text-primary-foreground' :
+                            index === 1 ? 'bg-secondary text-secondary-foreground' :
+                            index === 2 ? 'bg-accent text-accent-foreground' :
+                            'bg-background text-foreground'
+                          }`}>
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-semibold">{entry.full_name}</div>
+                            <div className="text-sm text-muted-foreground space-x-4">
+                              <span>🚴 {entry.total_rides} ture</span>
+                              <span>📍 {Math.round(entry.total_distance)} km</span>
+                              <span>⛰️ {Math.round(entry.total_elevation)} m</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-primary">{entry.points}</div>
+                            <div className="text-xs text-muted-foreground">point</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="challenges" className="space-y-4">
               <div className="flex gap-4 mb-6">

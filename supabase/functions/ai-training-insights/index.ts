@@ -12,54 +12,37 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisType, userData } = await req.json();
+    const { analysisType, message, userData } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    let systemPrompt = '';
-    let userPrompt = '';
+    const systemPrompt = `Du er en ekspert cykel-træningscoach og personlig træningspartner. 
+    
+Din opgave er at:
+- Give konkrete, handlingsorienterede råd
+- Være venlig og motiverende
+- Svare på dansk
+- Bruge emojis hvor det giver mening
+- Holde svar korte og præcise (max 150 ord)
+- Fokusere på brugerens specifikke situation
 
-    switch (analysisType) {
-      case 'analyze':
-        systemPrompt = `You are an expert cycling coach. Analyze training data and provide actionable insights.
-        Focus on: training load, recovery, performance trends, areas for improvement.
-        Be specific and practical.`;
-        userPrompt = `Analyze this cyclist's profile:
-        Experience: ${userData.profile?.experience_level}
-        FTP: ${userData.profile?.ftp}W
-        Weekly training hours: ${userData.profile?.weekly_training_hours}
-        Recent sessions: ${userData.sessions?.length || 0}
-        
-        Provide: current fitness assessment, training load analysis, recovery recommendations, next steps.`;
-        break;
-
-      case 'goals':
-        systemPrompt = `You are a cycling performance coach helping set SMART goals.
-        Create realistic, measurable goals based on current fitness and experience.`;
-        userPrompt = `Help set goals for:
-        Experience: ${userData.profile?.experience_level}
-        FTP: ${userData.profile?.ftp}W
-        Discipline: ${userData.profile?.cycling_discipline}
-        
-        Suggest 3-5 achievable goals for the next 3 months with specific metrics and milestones.`;
-        break;
-
-      case 'nutrition':
-        systemPrompt = `You are a sports nutritionist specializing in cycling.
-        Provide practical nutrition advice for training and recovery.`;
-        userPrompt = `Nutrition guidance for:
-        Weekly training: ${userData.profile?.weekly_training_hours}h
-        Weight: ${userData.profile?.weight_kg}kg
-        Discipline: ${userData.profile?.cycling_discipline}
-        
-        Include: daily calorie needs, pre/during/post-ride nutrition, hydration, supplements.`;
-        break;
-
-      default:
-        throw new Error('Invalid analysis type');
+Brugerdata: ${JSON.stringify(userData, null, 2)}`;
+    
+    let userPrompt = "";
+    
+    if (analysisType === 'chat') {
+      userPrompt = message;
+    } else if (analysisType === 'analyze') {
+      userPrompt = `Analyser denne brugers træningsdata og giv indsigt i mønstre og fremskridt.`;
+    } else if (analysisType === 'goals') {
+      userPrompt = `Foreslå specifikke, opnåelige mål baseret på brugerens profil og træning.`;
+    } else if (analysisType === 'nutrition') {
+      userPrompt = `Giv ernæringsanbefalinger til denne cyklist baseret på deres træningsniveau.`;
+    } else {
+      throw new Error('Invalid analysis type');
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

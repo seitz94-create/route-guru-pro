@@ -100,18 +100,18 @@ const Profile = () => {
                   Dit Abonnement
                 </CardTitle>
                 <Badge 
-                  variant={profile.subscription_plan === 'premium' ? 'default' : profile.subscription_plan === 'pro' ? 'secondary' : 'outline'}
+                  variant={profile.subscription_plan === 'pro' ? 'default' : profile.subscription_plan === 'premium' ? 'secondary' : 'outline'}
                   className="text-sm"
                 >
-                  {profile.subscription_plan === 'free' ? 'Gratis' : profile.subscription_plan === 'pro' ? 'Pro' : 'Premium'}
+                  {profile.subscription_plan === 'free' ? 'Gratis' : profile.subscription_plan === 'premium' ? 'Premium' : 'Pro'}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">
                 {profile.subscription_plan === 'free' && 'Du har vores gratis plan. Opgrader for at få adgang til AI træningsråd og avancerede funktioner.'}
-                {profile.subscription_plan === 'pro' && 'Du har Pro-planen med AI træningsråd og Garmin/Wahoo sync.'}
-                {profile.subscription_plan === 'premium' && 'Du har Premium-planen med alle funktioner inkluderet!'}
+                {profile.subscription_plan === 'premium' && 'Du har Premium-planen med AI træningsråd og Garmin/Wahoo sync.'}
+                {profile.subscription_plan === 'pro' && 'Du har Pro-planen med alle funktioner inkluderet!'}
               </p>
               <Button 
                 variant="outline" 

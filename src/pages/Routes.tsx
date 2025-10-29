@@ -9,11 +9,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Lock } from 'lucide-react';
 import RouteCard from '@/components/RouteCard';
+import { useNavigate } from 'react-router-dom';
 
 const Routes = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [distance, setDistance] = useState('50');
   const [elevation, setElevation] = useState('500');
   const [terrain, setTerrain] = useState('road');
@@ -23,6 +25,7 @@ const Routes = () => {
   const [searching, setSearching] = useState(false);
   const [routes, setRoutes] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -36,11 +39,20 @@ const Routes = () => {
         .select('*')
         .eq('id', user.id)
         .single();
-      setProfile(data);
+      if (data) {
+        setProfile(data);
+        const plan = data.subscription_plan || 'free';
+        setHasAccess(plan === 'premium' || plan === 'pro');
+      }
     }
   };
 
   const handleFindRoutes = async () => {
+    if (!hasAccess) {
+      toast.error('AI ruteforslag kræver Premium eller Pro abonnement');
+      return;
+    }
+
     setSearching(true);
     setRoutes([]);
     
@@ -168,11 +180,27 @@ const Routes = () => {
               <Button 
                 onClick={handleFindRoutes} 
                 className="w-full"
-                disabled={searching}
+                disabled={searching || !hasAccess}
               >
                 <Sparkles className="w-4 h-4 mr-2" />
-                {searching ? 'Generating AI Suggestions...' : 'Get AI Route Suggestions'}
+                {!hasAccess ? (
+                  <>
+                    <Lock className="w-4 h-4 mr-2" />
+                    Kræver Premium/Pro
+                  </>
+                ) : searching ? 'Genererer AI Forslag...' : 'Få AI Ruteforslag'}
               </Button>
+              
+              {!hasAccess && (
+                <div className="text-center pt-4">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    AI-drevne ruteforslag kræver Premium eller Pro abonnement
+                  </p>
+                  <Button variant="link" onClick={() => navigate('/subscription')}>
+                    Se Abonnementer →
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
           

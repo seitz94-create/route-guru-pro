@@ -23,7 +23,7 @@ const Subscription = () => {
       variant: 'outline' as const,
     },
     {
-      name: 'Pro',
+      name: 'Premium',
       price: '59 kr',
       period: '/md',
       description: 'For seriøse cyklister',
@@ -40,12 +40,12 @@ const Subscription = () => {
       popular: true,
     },
     {
-      name: 'Premium',
+      name: 'Pro',
       price: '99 kr',
       period: '/md',
       description: 'Maksimal performance',
       features: [
-        'Alt i Pro',
+        'Alt i Premium',
         'Personlig AI coach',
         'Ernæringsplaner',
         'Community events',
@@ -53,7 +53,7 @@ const Subscription = () => {
         'Præstationsanalyse',
         'Prioriteret support',
       ],
-      cta: 'Gå Premium',
+      cta: 'Gå Pro',
       variant: 'secondary' as const,
     },
   ];

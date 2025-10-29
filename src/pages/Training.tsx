@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Lock } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -17,6 +18,7 @@ interface Message {
 
 const Training = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -29,6 +31,7 @@ const Training = () => {
   const [profile, setProfile] = useState<any>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -42,7 +45,11 @@ const Training = () => {
         supabase.from('training_sessions').select('*').eq('user_id', user.id).order('session_date', { ascending: false }).limit(10)
       ]);
       
-      if (profileRes.data) setProfile(profileRes.data);
+      if (profileRes.data) {
+        setProfile(profileRes.data);
+        const plan = profileRes.data.subscription_plan || 'free';
+        setHasAccess(plan === 'premium' || plan === 'pro');
+      }
       if (sessionsRes.data) setSessions(sessionsRes.data);
     }
   };
@@ -95,6 +102,50 @@ const Training = () => {
       setLoading(false);
     }
   };
+
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto px-4 pt-24 pb-20">
+          <div className="max-w-2xl mx-auto text-center">
+            <Card className="shadow-elevated">
+              <CardContent className="pt-12 pb-12">
+                <Lock className="w-16 h-16 mx-auto mb-6 text-muted-foreground" />
+                <h2 className="text-3xl font-bold mb-4">AI Træningspartner</h2>
+                <p className="text-muted-foreground mb-6">
+                  Denne funktion kræver Premium eller Pro abonnement for at få adgang til personlig AI træningsrådgivning.
+                </p>
+                <div className="space-y-3 mb-8 text-left max-w-md mx-auto">
+                  <div className="flex items-start gap-3">
+                    <Bot className="w-5 h-5 text-primary mt-1" />
+                    <div>
+                      <strong>AI Chat Support:</strong> Personlig træningsassistent 24/7
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Bot className="w-5 h-5 text-primary mt-1" />
+                    <div>
+                      <strong>Træningsindsigter:</strong> Avanceret analyse af dine ture
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Bot className="w-5 h-5 text-primary mt-1" />
+                    <div>
+                      <strong>Personlige Planer:</strong> Skræddersyede træningsprogrammer
+                    </div>
+                  </div>
+                </div>
+                <Button size="lg" onClick={() => navigate('/subscription')}>
+                  Se Abonnementer
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

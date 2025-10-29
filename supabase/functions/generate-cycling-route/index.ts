@@ -40,20 +40,20 @@ serve(async (req) => {
       // For loop routes, use round_trip with user's preferred distance
       const targetDistance = distance ? distance * 1000 : 50000; // Convert km to meters
       
-      // Map elevation preference to waypoints (more waypoints = hillier route)
-      const elevationPointsMap: Record<string, number> = {
-        'flat': 3,
-        'hilly': 5,
-        'mountainous': 8
+      // Map elevation preference to target meters per km and waypoints
+      const elevationConfig: Record<string, { minPerKm: number, maxPerKm: number, points: number }> = {
+        'flat': { minPerKm: 5, maxPerKm: 10, points: 3 },
+        'hilly': { minPerKm: 10, maxPerKm: 15, points: 5 },
+        'mountainous': { minPerKm: 15, maxPerKm: 25, points: 8 }
       };
-      const points = elevationPointsMap[elevation as string] || 5;
+      const config = elevationConfig[elevation as string] || elevationConfig['hilly'];
       
       requestBody = {
         coordinates: [[startCoords.lng, startCoords.lat]],
         options: {
           round_trip: {
             length: targetDistance,
-            points: points,
+            points: config.points,
             seed: Math.floor(Math.random() * 100)
           }
         },
@@ -61,7 +61,7 @@ serve(async (req) => {
         instructions: true
       };
       
-      console.log(`Using ${points} waypoints for elevation preference: ${elevation}`);
+      console.log(`Targeting ${config.minPerKm}-${config.maxPerKm}m/km elevation for ${elevation} with ${config.points} waypoints`);
       
       // Add direction preference if specified
       if (direction && direction !== 'none') {
@@ -87,12 +87,20 @@ serve(async (req) => {
       };
     }
 
-    // Iteratively call OpenRouteService to better match requested distance/elevation (loops only)
-    const maxAttempts = isLoop ? 3 : 1;
+    // Iteratively call OpenRouteService to match both distance AND elevation level (loops only)
+    const maxAttempts = isLoop ? 5 : 1;
     let attempt = 0;
     let finalFeature: any = null;
     let finalSummary: any = null;
     let finalRequestBody: any = requestBody;
+    
+    // Get elevation targets for loop routes
+    const elevationConfig: Record<string, { minPerKm: number, maxPerKm: number, points: number }> = {
+      'flat': { minPerKm: 5, maxPerKm: 10, points: 3 },
+      'hilly': { minPerKm: 10, maxPerKm: 15, points: 5 },
+      'mountainous': { minPerKm: 15, maxPerKm: 25, points: 8 }
+    };
+    const targetConfig = elevationConfig[elevation as string] || elevationConfig['hilly'];
 
     while (attempt < maxAttempts) {
       const orsResponse = await fetch(
@@ -132,25 +140,49 @@ serve(async (req) => {
         ? ascentProp
         : (typeof ascentSummary === 'number' ? ascentSummary : null);
 
-      // If loop, try to adjust length to better match requested distance (km is PRIMARY)
-      if (isLoop && typeof distance === 'number' && distance > 0) {
-        const diff = Math.abs(actualDistanceKmNum - distance) / distance;
+      // Calculate meters per km
+      const actualMetersPerKm = actualElevationNum !== null ? actualElevationNum / actualDistanceKmNum : 0;
 
-        // Only retry if distance is off by more than 15% - elevation is secondary
-        if (diff > 0.15) {
-          // Adjust length proportionally towards the target distance
+      // Check if route matches criteria (distance is PRIMARY, elevation is secondary)
+      if (isLoop && typeof distance === 'number' && distance > 0) {
+        const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
+        const elevationTooLow = actualMetersPerKm < targetConfig.minPerKm * 0.7;
+        const elevationTooHigh = actualMetersPerKm > targetConfig.maxPerKm * 1.3;
+
+        // If distance is good but elevation is off, try to adjust
+        if (distanceDiff < 0.15 && (elevationTooLow || elevationTooHigh)) {
+          if (elevationTooLow && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points < 10) {
+            // Need more elevation - add waypoints
+            finalRequestBody.options.round_trip.points += 1;
+            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
+            console.log(`Elevation too low (${actualMetersPerKm.toFixed(1)}m/km), increasing waypoints to ${finalRequestBody.options.round_trip.points}`);
+            attempt++;
+            if (attempt < maxAttempts) continue;
+          } else if (elevationTooHigh && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points > 3) {
+            // Too much elevation - reduce waypoints
+            finalRequestBody.options.round_trip.points -= 1;
+            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
+            console.log(`Elevation too high (${actualMetersPerKm.toFixed(1)}m/km), decreasing waypoints to ${finalRequestBody.options.round_trip.points}`);
+            attempt++;
+            if (attempt < maxAttempts) continue;
+          } else {
+            // Just try different seed
+            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
+            attempt++;
+            if (attempt < maxAttempts) continue;
+          }
+        }
+        
+        // If distance is off, adjust it (PRIMARY concern)
+        if (distanceDiff > 0.15) {
           if (finalRequestBody?.options?.round_trip?.length) {
             const currentLength = finalRequestBody.options.round_trip.length;
             const factor = distance / actualDistanceKmNum;
             finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
           }
-          // Change seed to explore a different loop
-          if (finalRequestBody?.options?.round_trip) {
-            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
-          }
-
+          finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
+          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length`);
           attempt++;
-          // Try again with adjusted parameters
           if (attempt < maxAttempts) continue;
         }
       }

@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 // Fix default icon paths so markers render correctly in Vite builds
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 const DefaultIcon = L.icon({
   iconRetinaUrl: markerIcon2x,
@@ -47,22 +47,23 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
 
       // Use Thunderforest Outdoors map for better cycling route visibility
       // Get your free API key at: https://www.thunderforest.com/
-      const apiKey = 'YOUR_THUNDERFOREST_API_KEY_HERE'; // Replace with your actual API key
-      
-      if (!apiKey || apiKey === 'YOUR_THUNDERFOREST_API_KEY_HERE') {
+      const apiKey = "38e95cba2f714e3aaa45f4b608076719"; // Replace with your actual API key
+
+      if (!apiKey || apiKey === "38e95cba2f714e3aaa45f4b608076719") {
         // Fallback to OpenStreetMap if no API key
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors',
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
           maxZoom: 19,
         }).addTo(leafletMapRef.current);
       } else {
         L.tileLayer(`https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${apiKey}`, {
-          attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          attribution:
+            '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           maxZoom: 22,
         }).addTo(leafletMapRef.current);
       }
 
-      L.marker([lat, lng]).addTo(leafletMapRef.current).bindPopup('Startpunkt');
+      L.marker([lat, lng]).addTo(leafletMapRef.current).bindPopup("Startpunkt");
     } else {
       leafletMapRef.current.setView([lat, lng], 13);
     }
@@ -75,10 +76,10 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
 
     // Draw route path if provided
     if (path && path.length > 0 && leafletMapRef.current) {
-      const latLngs: [number, number][] = path.map(p => [p.lat, p.lng]);
-      
+      const latLngs: [number, number][] = path.map((p) => [p.lat, p.lng]);
+
       routeLayerRef.current = L.polyline(latLngs, {
-        color: 'hsl(var(--primary))',
+        color: "hsl(var(--primary))",
         weight: 4,
         opacity: 0.8,
       }).addTo(leafletMapRef.current);

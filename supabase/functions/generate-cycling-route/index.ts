@@ -12,14 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { startCoords, endCoords, terrain } = await req.json();
+    const { startCoords, endCoords, terrain, distance, elevation, direction, routeType } = await req.json();
     const OPENROUTESERVICE_API_KEY = Deno.env.get('OPENROUTESERVICE_API_KEY');
     
     if (!OPENROUTESERVICE_API_KEY) {
       throw new Error('OPENROUTESERVICE_API_KEY is not configured');
     }
 
-    console.log('Generating route with:', { startCoords, endCoords, terrain });
+    console.log('Generating route with:', { startCoords, endCoords, terrain, distance, direction, routeType });
 
     // Map terrain type to OpenRouteService profile
     const profileMap: Record<string, string> = {
@@ -31,25 +31,40 @@ serve(async (req) => {
     
     const profile = profileMap[terrain] || 'cycling-regular';
 
-    // Check if this is a loop route (same start and end)
-    const isLoop = startCoords.lat === endCoords.lat && startCoords.lng === endCoords.lng;
+    // Check if this is a loop route
+    const isLoop = routeType === 'loop' || (startCoords.lat === endCoords.lat && startCoords.lng === endCoords.lng);
     
     let requestBody: any;
     
     if (isLoop) {
-      // For loop routes, use round_trip option with single coordinate
+      // For loop routes, use round_trip with user's preferred distance
+      const targetDistance = distance ? distance * 1000 : 50000; // Convert km to meters
+      
       requestBody = {
         coordinates: [[startCoords.lng, startCoords.lat]],
         options: {
           round_trip: {
-            length: 50000, // 50km default
-            points: 5,
+            length: targetDistance,
+            points: 3,
             seed: Math.floor(Math.random() * 100)
           }
         },
         elevation: true,
         instructions: true
       };
+      
+      // Add direction preference if specified
+      if (direction) {
+        const bearingMap: Record<string, number> = {
+          'north': 0,
+          'east': 90,
+          'south': 180,
+          'west': 270
+        };
+        if (bearingMap[direction.toLowerCase()]) {
+          requestBody.options.round_trip.bearing = bearingMap[direction.toLowerCase()];
+        }
+      }
     } else {
       // For point-to-point routes
       requestBody = {

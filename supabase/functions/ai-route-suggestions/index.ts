@@ -19,49 +19,39 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const systemPrompt = `You are an expert cycling route planner for Denmark. Generate personalized cycling route suggestions based on user preferences.
+    const systemPrompt = `You are a geocoding and route planning assistant. Your job is to convert user location names to GPS coordinates.
     
-    Return a JSON array with exactly 3 route objects. Each route must have this exact structure:
+    Return a JSON object with the following structure:
     {
-      "name": "Route name",
-      "description": "Brief description of the route and what makes it special",
-      "requestedDistance": number (the approximate desired distance in km),
-      "difficulty": "Easy" | "Moderate" | "Hard" | "Expert",
-      "highlights": ["Point 1", "Point 2", "Point 3"],
-      "safetyNotes": "Important safety considerations",
-      "startPoint": "Starting location name (must be a real city/town in Denmark)",
-      "terrain": "road" | "gravel" | "mtb" | "mixed",
       "startCoords": {
-        "lat": number (latitude),
-        "lng": number (longitude)
+        "lat": number,
+        "lng": number
       },
       "endCoords": {
-        "lat": number (same as startCoords for loops),
-        "lng": number (same as startCoords for loops)
-      }
+        "lat": number,
+        "lng": number
+      },
+      "startPointName": "Actual city/location name",
+      "endPointName": "Actual city/location name"
     }
     
     CRITICAL REQUIREMENTS:
-    - ALL routes must be LOOP routes (endCoords = startCoords)
-    - Use coordinates of REAL major Danish cities/towns with good cycling infrastructure
-    - Popular cycling areas: Copenhagen (55.6761, 12.5683), Aarhus (56.1629, 10.2039), Odense (55.4038, 10.4024), Roskilde (55.6415, 12.0803)
-    - Coordinates MUST be at city centers or well-known starting points with roads
+    - Convert the user's start and end location names to accurate GPS coordinates
+    - Use real Danish cities/towns with good cycling infrastructure
+    - Coordinates MUST be at city centers or well-known starting points with actual roads
     - Do NOT use coordinates in water, fields, or areas without roads
+    - If user's location is vague, use the nearest major town
+    - Common Danish cycling cities: København (55.6761, 12.5683), Aarhus (56.1629, 10.2039), Odense (55.4038, 10.4024), Roskilde (55.6415, 12.0803)
     
-    Only return valid JSON array, no markdown formatting.`;
+    Only return valid JSON, no markdown formatting.`;
 
-    const userPrompt = `Generate route suggestions for:
-    Distance: ${preferences.distance}km
-    Elevation: ${preferences.elevation}m
-    Terrain: ${preferences.terrain}
-    ${preferences.direction ? `Preferred direction: ${preferences.direction}` : ''}
-    ${preferences.roadType ? `Road preference: ${preferences.roadType}` : ''}
-    ${preferences.avoidTraffic ? 'Avoid high-traffic roads' : ''}
+    const isLoop = preferences.routeType === 'loop' || !preferences.endLocation;
     
-    User profile:
-    Experience: ${userProfile?.experience_level || 'intermediate'}
-    Discipline: ${userProfile?.cycling_discipline || 'road'}
-    Location: ${userProfile?.location || 'not specified'}`;
+    const userPrompt = `Convert these locations to GPS coordinates:
+    Start location: ${preferences.startLocation}
+    End location: ${isLoop ? preferences.startLocation : preferences.endLocation}
+    
+    These locations are in Denmark.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -100,61 +90,62 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    let suggestions = data.choices[0].message.content;
+    let aiResponse = data.choices[0].message.content;
     
     // Clean up markdown formatting if present
-    suggestions = suggestions.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    aiResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
-    // Parse the JSON to validate it
-    const aiRoutes = JSON.parse(suggestions);
+    // Parse coordinates from AI
+    const locationData = JSON.parse(aiResponse);
     
-    console.log('AI generated', aiRoutes.length, 'route concepts');
+    console.log('AI geocoded locations:', locationData);
 
-    // Generate actual routes using OpenRouteService for each AI suggestion
-    const routePromises = aiRoutes.map(async (aiRoute: any) => {
-      try {
-        const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': req.headers.get('Authorization') || '',
-          },
-          body: JSON.stringify({
-            startCoords: aiRoute.startCoords,
-            endCoords: aiRoute.endCoords,
-            terrain: aiRoute.terrain
-          })
-        });
-
-        if (!routeResponse.ok) {
-          console.error('Failed to generate route for:', aiRoute.name);
-          return null;
-        }
-
-        const routeData = await routeResponse.json();
-        
-        // Merge AI metadata with actual route data
-        return {
-          ...aiRoute,
-          distance: parseFloat(routeData.distance),
-          elevation: routeData.elevation,
-          estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
-          path: routeData.path,
-          coordinates: aiRoute.startCoords,
-          gpxData: routeData.gpxData
-        };
-      } catch (error) {
-        console.error('Error generating route:', error);
-        return null;
-      }
+    // Call OpenRouteService to generate the actual route
+    const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': req.headers.get('Authorization') || '',
+      },
+      body: JSON.stringify({
+        startCoords: locationData.startCoords,
+        endCoords: locationData.endCoords,
+        terrain: preferences.terrain,
+        distance: preferences.distance,
+        elevation: preferences.elevation,
+        direction: preferences.direction,
+        routeType: preferences.routeType
+      })
     });
 
-    const generatedRoutes = await Promise.all(routePromises);
-    const routes = generatedRoutes.filter(r => r !== null);
-    
-    console.log('Successfully generated', routes.length, 'complete routes');
+    if (!routeResponse.ok) {
+      const errorText = await routeResponse.text();
+      console.error('Failed to generate route:', errorText);
+      throw new Error('Could not generate route');
+    }
 
-    return new Response(JSON.stringify({ routes }), {
+    const routeData = await routeResponse.json();
+    
+    // Return single route with all data
+    const route = {
+      name: `${locationData.startPointName}${isLoop ? ' Loop' : ` til ${locationData.endPointName}`}`,
+      description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction ? ` mod ${preferences.direction}` : ''}`,
+      distance: parseFloat(routeData.distance),
+      elevation: routeData.elevation,
+      difficulty: preferences.distance < 30 ? 'Easy' : preferences.distance < 60 ? 'Moderate' : 'Hard',
+      estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
+      highlights: routeData.highlights || [`Start: ${locationData.startPointName}`, `Distance: ${routeData.distance}km`, `Elevation: ${routeData.elevation}m`],
+      safetyNotes: 'Vær opmærksom på trafik og vejrforhold',
+      startPoint: locationData.startPointName,
+      terrain: preferences.terrain,
+      path: routeData.path,
+      coordinates: locationData.startCoords,
+      gpxData: routeData.gpxData
+    };
+    
+    console.log('Successfully generated route');
+
+    return new Response(JSON.stringify({ routes: [route] }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

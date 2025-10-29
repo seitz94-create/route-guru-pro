@@ -20,8 +20,9 @@ const Routes = () => {
   const [elevation, setElevation] = useState('500');
   const [terrain, setTerrain] = useState('road');
   const [direction, setDirection] = useState('');
-  const [roadType, setRoadType] = useState('mixed');
-  const [avoidTraffic, setAvoidTraffic] = useState(true);
+  const [routeType, setRouteType] = useState<'loop' | 'point-to-point'>('loop');
+  const [startLocation, setStartLocation] = useState('');
+  const [endLocation, setEndLocation] = useState('');
   const [searching, setSearching] = useState(false);
   const [routes, setRoutes] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
@@ -60,12 +61,13 @@ const Routes = () => {
       const { data, error } = await supabase.functions.invoke('ai-route-suggestions', {
         body: {
           preferences: {
-            distance,
-            elevation,
+            distance: parseInt(distance),
+            elevation: parseInt(elevation),
             terrain,
             direction,
-            roadType,
-            avoidTraffic
+            routeType,
+            startLocation: startLocation || profile?.location,
+            endLocation: routeType === 'point-to-point' ? endLocation : startLocation
           },
           userProfile: profile
         }
@@ -101,9 +103,46 @@ const Routes = () => {
               <CardTitle>Route Preferences</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="routeType">Rute Type</Label>
+                <Select value={routeType} onValueChange={(value: 'loop' | 'point-to-point') => setRouteType(value)}>
+                  <SelectTrigger id="routeType">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="loop">Rundtur (loop)</SelectItem>
+                    <SelectItem value="point-to-point">Punkt-til-punkt</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="distance">{t('routes.distance')}</Label>
+                  <Label htmlFor="startLocation">Startsted</Label>
+                  <Input
+                    id="startLocation"
+                    placeholder="f.eks. Roskilde, København"
+                    value={startLocation}
+                    onChange={(e) => setStartLocation(e.target.value)}
+                  />
+                </div>
+                
+                {routeType === 'point-to-point' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="endLocation">Slutsted</Label>
+                    <Input
+                      id="endLocation"
+                      placeholder="f.eks. Aarhus, Odense"
+                      value={endLocation}
+                      onChange={(e) => setEndLocation(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="distance">{t('routes.distance')} (km)</Label>
                   <Input
                     id="distance"
                     type="number"
@@ -115,7 +154,7 @@ const Routes = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="elevation">{t('routes.elevation')}</Label>
+                  <Label htmlFor="elevation">{t('routes.elevation')} (m)</Label>
                   <Input
                     id="elevation"
                     type="number"
@@ -142,39 +181,19 @@ const Routes = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="direction">Preferred Direction</Label>
-                <Input
-                  id="direction"
-                  placeholder="e.g., North, towards mountains"
-                  value={direction}
-                  onChange={(e) => setDirection(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roadType">Road Type</Label>
-                <Select value={roadType} onValueChange={setRoadType}>
-                  <SelectTrigger id="roadType">
-                    <SelectValue />
+                <Label htmlFor="direction">Retning (valgfri)</Label>
+                <Select value={direction} onValueChange={setDirection}>
+                  <SelectTrigger id="direction">
+                    <SelectValue placeholder="Vælg retning" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mixed">Mixed</SelectItem>
-                    <SelectItem value="quiet">Quiet roads</SelectItem>
-                    <SelectItem value="scenic">Scenic routes</SelectItem>
-                    <SelectItem value="popular">Popular cycling routes</SelectItem>
+                    <SelectItem value="">Ingen præference</SelectItem>
+                    <SelectItem value="north">Nord</SelectItem>
+                    <SelectItem value="south">Syd</SelectItem>
+                    <SelectItem value="east">Øst</SelectItem>
+                    <SelectItem value="west">Vest</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="avoidTraffic"
-                  checked={avoidTraffic}
-                  onCheckedChange={(checked) => setAvoidTraffic(checked as boolean)}
-                />
-                <Label htmlFor="avoidTraffic" className="cursor-pointer">
-                  Avoid high-traffic roads
-                </Label>
               </div>
               
               <Button 

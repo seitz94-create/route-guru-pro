@@ -67,12 +67,18 @@ serve(async (req) => {
       console.log('End location geocoded:', endGeoData);
     }
 
-    // Generate 3 different route suggestions 
-    const routePromises = [];
-    
-    for (let variant = 1; variant <= 3; variant++) {
-      routePromises.push(
-        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
+    // Ensure at least 3 route suggestions with retries
+    const routes: any[] = [];
+    let variant = 1;
+
+    const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+    while (routes.length < 3 && variant <= 6) {
+      let attempt = 0;
+      let added = false;
+
+      while (attempt < 2 && !added) {
+        const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -90,21 +96,15 @@ serve(async (req) => {
             endLocation: preferences.endLocation,
             variant
           })
-        })
-        .then(async (routeResponse) => {
-          if (!routeResponse.ok) {
-            const errorText = await routeResponse.text();
-            console.error(`Failed to generate route variant ${variant}:`, errorText);
-            return null;
-          }
+        });
 
+        if (routeResponse.ok) {
           const routeData = await routeResponse.json();
-          
-          const routeName = variant === 1 ? 
+          const routeName = variant === 1 ?
             `${preferences.startLocation}${isLoop ? ' Loop' : ` til ${preferences.endLocation}`}` :
             `${preferences.startLocation}${isLoop ? ' Loop' : ` til ${preferences.endLocation}`} (Variant ${variant})`;
-          
-          return {
+
+          routes.push({
             name: routeName,
             description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction && preferences.direction !== 'none' ? ` mod ${preferences.direction}` : ''}`,
             distance: parseFloat(routeData.distance),
@@ -118,21 +118,23 @@ serve(async (req) => {
             path: routeData.path,
             coordinates: startGeoData.coords,
             gpxData: routeData.gpxData
-          };
-        })
-        .catch((error) => {
-          console.error(`Error generating variant ${variant}:`, error);
-          return null;
-        })
-      );
+          });
+          added = true;
+        } else {
+          const errorText = await routeResponse.text();
+          console.error(`Failed to generate route variant ${variant} (attempt ${attempt + 1}/2):`, errorText);
+          await wait(300 + attempt * 200);
+          attempt++;
+        }
+      }
+
+      variant++;
     }
 
-    const routes = (await Promise.all(routePromises)).filter(route => route !== null);
-    
     if (routes.length === 0) {
       throw new Error('Could not generate any route variants');
     }
-    
+
     console.log(`Successfully generated ${routes.length} route variants`);
 
     return new Response(JSON.stringify({ routes }), {

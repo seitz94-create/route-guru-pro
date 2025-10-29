@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -88,7 +90,7 @@ serve(async (req) => {
     }
 
     // Iteratively call OpenRouteService to match both distance AND elevation level (loops only)
-    const maxAttempts = isLoop ? 10 : 1;
+    const maxAttempts = isLoop ? 4 : 1;
     let attempt = 0;
     let finalFeature: any = null;
     let finalSummary: any = null;
@@ -125,6 +127,12 @@ serve(async (req) => {
       if (!orsResponse.ok) {
         const errorText = await orsResponse.text();
         console.error('OpenRouteService error:', orsResponse.status, errorText);
+        if ((orsResponse.status === 429 || orsResponse.status === 500 || orsResponse.status === 503) && attempt < maxAttempts - 1) {
+          console.log(`Transient ORS error ${orsResponse.status}, retrying after short delay...`);
+          attempt++;
+          await sleep(400);
+          continue;
+        }
         throw new Error(`OpenRouteService error: ${orsResponse.status}`);
       }
 

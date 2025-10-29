@@ -1,11 +1,38 @@
 import { Navigation } from '@/components/Navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Subscription = () => {
   const navigate = useNavigate();
+  const [currentPlan, setCurrentPlan] = useState<string>('free');
+
+  useEffect(() => {
+    loadCurrentPlan();
+  }, []);
+
+  const loadCurrentPlan = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('subscription_plan')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        setCurrentPlan(data.subscription_plan || 'free');
+      }
+    } catch (error) {
+      console.error('Error loading plan:', error);
+    }
+  };
 
   const plans = [
     {
@@ -21,6 +48,7 @@ const Subscription = () => {
       ],
       cta: 'Kom i gang gratis',
       variant: 'outline' as const,
+      planKey: 'free' as const,
     },
     {
       name: 'Premium',
@@ -38,6 +66,7 @@ const Subscription = () => {
       cta: 'Start gratis prøveperiode',
       variant: 'default' as const,
       popular: true,
+      planKey: 'premium' as const,
     },
     {
       name: 'Pro',
@@ -55,6 +84,7 @@ const Subscription = () => {
       ],
       cta: 'Gå Pro',
       variant: 'secondary' as const,
+      planKey: 'pro' as const,
     },
   ];
 
@@ -74,18 +104,27 @@ const Subscription = () => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {plans.map((plan, index) => (
-              <Card 
-                key={index} 
-                className={`relative ${plan.popular ? 'border-primary shadow-elevated' : ''}`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-0 right-0 flex justify-center">
-                    <span className="bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-semibold">
-                      Mest populær
-                    </span>
-                  </div>
-                )}
+            {plans.map((plan, index) => {
+              const isCurrentPlan = plan.planKey === currentPlan;
+              return (
+                <Card 
+                  key={index} 
+                  className={`relative ${plan.popular ? 'border-primary shadow-elevated' : ''} ${isCurrentPlan ? 'border-2 border-primary bg-primary/5' : ''}`}
+                >
+                  {plan.popular && !isCurrentPlan && (
+                    <div className="absolute -top-4 left-0 right-0 flex justify-center">
+                      <span className="bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-semibold">
+                        Mest populær
+                      </span>
+                    </div>
+                  )}
+                  {isCurrentPlan && (
+                    <div className="absolute -top-4 left-0 right-0 flex justify-center">
+                      <Badge className="bg-accent text-accent-foreground px-4 py-1 text-sm font-semibold">
+                        Din nuværende plan
+                      </Badge>
+                    </div>
+                  )}
                 
                 <CardHeader className="pb-8 pt-8">
                   <CardTitle className="text-2xl mb-2">{plan.name}</CardTitle>
@@ -108,14 +147,16 @@ const Subscription = () => {
                   
                   <Button 
                     className="w-full" 
-                    variant={plan.variant}
+                    variant={isCurrentPlan ? 'outline' : plan.variant}
                     onClick={() => navigate('/auth')}
+                    disabled={isCurrentPlan}
                   >
-                    {plan.cta}
+                    {isCurrentPlan ? 'Din nuværende plan' : plan.cta}
                   </Button>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
 
           <div className="text-center space-y-4">

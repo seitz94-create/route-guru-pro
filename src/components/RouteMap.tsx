@@ -45,21 +45,20 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
         scrollWheelZoom: false,
       });
 
-      // Use Thunderforest Outdoors map for better cycling route visibility
-      // Get your free API key at: https://www.thunderforest.com/
-      const apiKey = "38e95cba2f714e3aaa45f4b608076719"; // Replace with your actual API key
+      // Use Thunderforest Cycle map for better cycling route visibility
+      const apiKey = import.meta.env.VITE_THUNDERFOREST_API_KEY;
 
-      if (!apiKey || apiKey === "38e95cba2f714e3aaa45f4b608076719") {
+      if (apiKey) {
+        L.tileLayer(`https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=${apiKey}`, {
+          attribution:
+            '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 22,
+        }).addTo(leafletMapRef.current);
+      } else {
         // Fallback to OpenStreetMap if no API key
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
           maxZoom: 19,
-        }).addTo(leafletMapRef.current);
-      } else {
-        L.tileLayer(`https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${apiKey}`, {
-          attribution:
-            '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 22,
         }).addTo(leafletMapRef.current);
       }
 

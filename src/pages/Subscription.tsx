@@ -121,7 +121,7 @@ const Subscription = () => {
               return (
                 <Card 
                   key={index} 
-                  className={`relative ${plan.popular ? 'border-primary shadow-elevated' : ''} ${isCurrentPlan ? 'border-2 border-primary bg-primary/5' : ''}`}
+                  className={`relative ${plan.popular && !isDowngrade ? 'border-primary shadow-elevated' : ''} ${isCurrentPlan ? 'border-2 border-primary bg-primary/5' : ''}`}
                 >
                   {plan.popular && !isCurrentPlan && !isDowngrade && (
                     <div className="absolute -top-4 left-0 right-0 flex justify-center">

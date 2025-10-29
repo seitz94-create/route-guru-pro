@@ -23,6 +23,7 @@ const Routes = () => {
   const [routeType, setRouteType] = useState<'loop' | 'point-to-point'>('loop');
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
+  const [useHomeAddress, setUseHomeAddress] = useState(false);
   const [searching, setSearching] = useState(false);
   const [routes, setRoutes] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
@@ -39,18 +40,45 @@ const Routes = () => {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       if (data) {
         setProfile(data);
         const plan = data.subscription_plan || 'free';
         setHasAccess(plan === 'premium' || plan === 'pro');
+        
+        // If user has a home address and useHomeAddress is checked, set it
+        if (data.location && useHomeAddress) {
+          setStartLocation(data.location);
+        }
       }
     }
   };
 
+  // Update start location when useHomeAddress changes
+  useEffect(() => {
+    if (useHomeAddress && profile?.location) {
+      setStartLocation(profile.location);
+    } else if (!useHomeAddress && startLocation === profile?.location) {
+      setStartLocation('');
+    }
+  }, [useHomeAddress, profile?.location]);
+
   const handleFindRoutes = async () => {
     if (!hasAccess) {
       toast.error('AI ruteforslag kræver Premium eller Pro abonnement');
+      return;
+    }
+
+    // Validate start location
+    const finalStartLocation = useHomeAddress ? profile?.location : startLocation;
+    if (!finalStartLocation || finalStartLocation.trim().length === 0) {
+      toast.error('Angiv venligst et startsted');
+      return;
+    }
+
+    // Validate end location for point-to-point routes
+    if (routeType === 'point-to-point' && (!endLocation || endLocation.trim().length === 0)) {
+      toast.error('Angiv venligst et slutsted for punkt-til-punkt ruter');
       return;
     }
 
@@ -66,8 +94,8 @@ const Routes = () => {
             terrain,
             direction,
             routeType,
-            startLocation: startLocation || profile?.location,
-            endLocation: routeType === 'point-to-point' ? endLocation : startLocation
+            startLocation: finalStartLocation,
+            endLocation: routeType === 'point-to-point' ? endLocation : finalStartLocation
           },
           userProfile: profile
         }
@@ -116,28 +144,48 @@ const Routes = () => {
                 </Select>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="startLocation">Startsted</Label>
-                  <Input
-                    id="startLocation"
-                    placeholder="f.eks. Roskilde, København"
-                    value={startLocation}
-                    onChange={(e) => setStartLocation(e.target.value)}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 pb-2">
+                  <Checkbox 
+                    id="useHomeAddress" 
+                    checked={useHomeAddress}
+                    onCheckedChange={(checked) => setUseHomeAddress(checked as boolean)}
+                    disabled={!profile?.location}
                   />
+                  <Label 
+                    htmlFor="useHomeAddress" 
+                    className={`cursor-pointer ${!profile?.location ? 'text-muted-foreground' : ''}`}
+                  >
+                    Start fra min hjemmeadresse
+                    {!profile?.location && ' (angiv adresse i profil først)'}
+                  </Label>
                 </div>
-                
-                {routeType === 'point-to-point' && (
+
+                <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="endLocation">Slutsted</Label>
+                    <Label htmlFor="startLocation">Startsted</Label>
                     <Input
-                      id="endLocation"
-                      placeholder="f.eks. Aarhus, Odense"
-                      value={endLocation}
-                      onChange={(e) => setEndLocation(e.target.value)}
+                      id="startLocation"
+                      placeholder="f.eks. Roskilde, København"
+                      value={startLocation}
+                      onChange={(e) => setStartLocation(e.target.value)}
+                      disabled={useHomeAddress}
+                      className={useHomeAddress ? 'bg-muted' : ''}
                     />
                   </div>
-                )}
+                  
+                  {routeType === 'point-to-point' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="endLocation">Slutsted</Label>
+                      <Input
+                        id="endLocation"
+                        placeholder="f.eks. Aarhus, Odense"
+                        value={endLocation}
+                        onChange={(e) => setEndLocation(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">

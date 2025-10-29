@@ -88,11 +88,17 @@ serve(async (req) => {
     }
 
     // Iteratively call OpenRouteService to match both distance AND elevation level (loops only)
-    const maxAttempts = isLoop ? 5 : 1;
+    const maxAttempts = isLoop ? 10 : 1;
     let attempt = 0;
     let finalFeature: any = null;
     let finalSummary: any = null;
     let finalRequestBody: any = requestBody;
+    
+    // Track best candidate by distance difference
+    let bestFeature: any = null;
+    let bestSummary: any = null;
+    let bestRequestBody: any = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
     
     // Get elevation targets for loop routes
     const elevationConfig: Record<string, { minPerKm: number, maxPerKm: number, points: number }> = {
@@ -143,58 +149,78 @@ serve(async (req) => {
       // Calculate meters per km
       const actualMetersPerKm = actualElevationNum !== null ? actualElevationNum / actualDistanceKmNum : 0;
 
-      // Check if route matches criteria (distance is PRIMARY, elevation is secondary)
+      // Update best candidate by distance difference
+      if (isLoop && typeof distance === 'number' && distance > 0) {
+        const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
+        if (distanceDiff < bestDiff) {
+          bestDiff = distanceDiff;
+          bestFeature = feature;
+          bestSummary = summary;
+          bestRequestBody = JSON.parse(JSON.stringify(finalRequestBody));
+        }
+      }
+
+      // Acceptance / adjustment logic
       if (isLoop && typeof distance === 'number' && distance > 0) {
         const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
         const elevationTooLow = actualMetersPerKm < targetConfig.minPerKm * 0.7;
         const elevationTooHigh = actualMetersPerKm > targetConfig.maxPerKm * 1.3;
 
-        // If distance is good but elevation is off, try to adjust
+        // If distance is within 10%, accept immediately (km is primary)
+        if (distanceDiff <= 0.10) {
+          finalFeature = feature;
+          finalSummary = summary;
+          break;
+        }
+
+        // If distance is off, adjust it (PRIMARY concern) without changing seed
+        if (distanceDiff > 0.10) {
+          if (finalRequestBody?.options?.round_trip?.length) {
+            const currentLength = finalRequestBody.options.round_trip.length;
+            const factor = distance / actualDistanceKmNum;
+            finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
+          }
+          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length`);
+          attempt++;
+          if (attempt < maxAttempts) continue;
+        }
+
+        // Distance ok but elevation off: try to adjust points/seed
         if (distanceDiff < 0.15 && (elevationTooLow || elevationTooHigh)) {
           if (elevationTooLow && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points < 10) {
-            // Need more elevation - add waypoints
             finalRequestBody.options.round_trip.points += 1;
             finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
             console.log(`Elevation too low (${actualMetersPerKm.toFixed(1)}m/km), increasing waypoints to ${finalRequestBody.options.round_trip.points}`);
             attempt++;
             if (attempt < maxAttempts) continue;
           } else if (elevationTooHigh && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points > 3) {
-            // Too much elevation - reduce waypoints
             finalRequestBody.options.round_trip.points -= 1;
             finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
             console.log(`Elevation too high (${actualMetersPerKm.toFixed(1)}m/km), decreasing waypoints to ${finalRequestBody.options.round_trip.points}`);
             attempt++;
             if (attempt < maxAttempts) continue;
           } else {
-            // Just try different seed
             finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
             attempt++;
             if (attempt < maxAttempts) continue;
           }
         }
-        
-        // If distance is off, adjust it (PRIMARY concern)
-        if (distanceDiff > 0.15) {
-          if (finalRequestBody?.options?.round_trip?.length) {
-            const currentLength = finalRequestBody.options.round_trip.length;
-            const factor = distance / actualDistanceKmNum;
-            finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
-          }
-          finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
-          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length`);
-          attempt++;
-          if (attempt < maxAttempts) continue;
-        }
       }
 
-      // Accept this route
+      // Accept current route if no other conditions triggered
       finalFeature = feature;
       finalSummary = summary;
       break;
     }
 
     if (!finalFeature || !finalSummary) {
-      throw new Error('Failed to generate a suitable route');
+      if (bestFeature && bestSummary) {
+        finalFeature = bestFeature;
+        finalSummary = bestSummary;
+        finalRequestBody = bestRequestBody || finalRequestBody;
+      } else {
+        throw new Error('Failed to generate a suitable route');
+      }
     }
 
     // Convert GeoJSON coordinates to lat/lng format

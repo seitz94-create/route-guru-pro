@@ -23,11 +23,16 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface RouteMapProps {
   lat: number;
   lng: number;
+  path?: Array<{
+    lat: number;
+    lng: number;
+  }>;
 }
 
-const RouteMap: React.FC<RouteMapProps> = ({ lat, lng }) => {
+const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
+  const routeLayerRef = useRef<L.Polyline | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -50,14 +55,40 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng }) => {
       leafletMapRef.current.setView([lat, lng], 13);
     }
 
+    // Remove existing route if any
+    if (routeLayerRef.current) {
+      routeLayerRef.current.remove();
+      routeLayerRef.current = null;
+    }
+
+    // Draw route path if provided
+    if (path && path.length > 0 && leafletMapRef.current) {
+      const latLngs: [number, number][] = path.map(p => [p.lat, p.lng]);
+      
+      routeLayerRef.current = L.polyline(latLngs, {
+        color: 'hsl(var(--primary))',
+        weight: 4,
+        opacity: 0.8,
+      }).addTo(leafletMapRef.current);
+
+      // Fit map to show entire route
+      leafletMapRef.current.fitBounds(routeLayerRef.current.getBounds(), {
+        padding: [20, 20],
+      });
+    }
+
     return () => {
       // Cleanup when component unmounts
+      if (routeLayerRef.current) {
+        routeLayerRef.current.remove();
+        routeLayerRef.current = null;
+      }
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
       }
     };
-  }, [lat, lng]);
+  }, [lat, lng, path]);
 
   return <div ref={mapRef} className="w-full h-48 rounded-md overflow-hidden" />;
 };

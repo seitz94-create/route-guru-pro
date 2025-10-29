@@ -36,11 +36,20 @@ serve(async (req) => {
       "coordinates": {
         "lat": number (latitude, e.g., 55.6761 for Copenhagen),
         "lng": number (longitude, e.g., 12.5683 for Copenhagen)
-      }
+      },
+      "path": [
+        {"lat": number, "lng": number},
+        {"lat": number, "lng": number},
+        ... (minimum 5-10 waypoints that create a realistic route path)
+      ]
     }
     
-    IMPORTANT: Include realistic GPS coordinates (latitude and longitude) for the starting point of each route.
-    Make sure coordinates match the location and country mentioned in user profile or route description.
+    IMPORTANT: 
+    - Include realistic GPS coordinates for the starting point of each route
+    - Generate a complete route path with 5-10 waypoints that form a realistic cycling route
+    - The path should start at the coordinates point and create a loop or out-and-back route
+    - Make sure coordinates match the location and country mentioned in user profile or route description
+    - Path waypoints should be spaced appropriately based on the total distance
     
     Only return valid JSON array, no markdown formatting.`;
 

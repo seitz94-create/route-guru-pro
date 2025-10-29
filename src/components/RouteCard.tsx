@@ -20,6 +20,10 @@ interface Route {
     lat: number;
     lng: number;
   };
+  path?: Array<{
+    lat: number;
+    lng: number;
+  }>;
 }
 
 interface RouteCardProps {
@@ -59,7 +63,11 @@ const RouteCard = ({ route }: RouteCardProps) => {
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
       <div className="relative h-48 overflow-hidden">
         {route.coordinates ? (
-          <RouteMap lat={route.coordinates.lat} lng={route.coordinates.lng} />
+          <RouteMap 
+            lat={route.coordinates.lat} 
+            lng={route.coordinates.lng}
+            path={route.path}
+          />
         ) : (
           <div className="w-full h-48 bg-muted flex items-center justify-center text-xs text-muted-foreground">
             Intet kort tilgængeligt

@@ -19,7 +19,7 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const systemPrompt = `You are an expert cycling route planner. Generate personalized cycling route suggestions based on user preferences.
+    const systemPrompt = `You are an expert cycling route planner for Denmark. Generate personalized cycling route suggestions based on user preferences.
     
     Return a JSON array with exactly 3 route objects. Each route must have this exact structure:
     {
@@ -29,24 +29,24 @@ serve(async (req) => {
       "difficulty": "Easy" | "Moderate" | "Hard" | "Expert",
       "highlights": ["Point 1", "Point 2", "Point 3"],
       "safetyNotes": "Important safety considerations",
-      "startPoint": "Starting location name",
+      "startPoint": "Starting location name (must be a real city/town in Denmark)",
       "terrain": "road" | "gravel" | "mtb" | "mixed",
       "startCoords": {
-        "lat": number (latitude, e.g., 55.6761 for Copenhagen),
-        "lng": number (longitude, e.g., 12.5683 for Copenhagen)
+        "lat": number (latitude),
+        "lng": number (longitude)
       },
       "endCoords": {
-        "lat": number (latitude - can be same as start for loops),
-        "lng": number (longitude - can be same as start for loops)
+        "lat": number (same as startCoords for loops),
+        "lng": number (same as startCoords for loops)
       }
     }
     
-    IMPORTANT: 
-    - Include realistic GPS coordinates for start and end points
-    - For loop routes, make endCoords the same as startCoords
-    - For out-and-back routes, place endCoords at the turnaround point
-    - Make sure coordinates match the location and country mentioned in user profile or route description
-    - Choose coordinates that are approximately the requested distance apart
+    CRITICAL REQUIREMENTS:
+    - ALL routes must be LOOP routes (endCoords = startCoords)
+    - Use coordinates of REAL major Danish cities/towns with good cycling infrastructure
+    - Popular cycling areas: Copenhagen (55.6761, 12.5683), Aarhus (56.1629, 10.2039), Odense (55.4038, 10.4024), Roskilde (55.6415, 12.0803)
+    - Coordinates MUST be at city centers or well-known starting points with roads
+    - Do NOT use coordinates in water, fields, or areas without roads
     
     Only return valid JSON array, no markdown formatting.`;
 

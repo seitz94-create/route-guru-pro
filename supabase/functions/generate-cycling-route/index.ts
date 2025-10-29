@@ -31,25 +31,48 @@ serve(async (req) => {
     
     const profile = profileMap[terrain] || 'cycling-regular';
 
+    // Check if this is a loop route (same start and end)
+    const isLoop = startCoords.lat === endCoords.lat && startCoords.lng === endCoords.lng;
+    
+    let requestBody: any;
+    
+    if (isLoop) {
+      // For loop routes, use round_trip option with single coordinate
+      requestBody = {
+        coordinates: [[startCoords.lng, startCoords.lat]],
+        options: {
+          round_trip: {
+            length: 50000, // 50km default
+            points: 5,
+            seed: Math.floor(Math.random() * 100)
+          }
+        },
+        elevation: true,
+        instructions: true
+      };
+    } else {
+      // For point-to-point routes
+      requestBody = {
+        coordinates: [
+          [startCoords.lng, startCoords.lat],
+          [endCoords.lng, endCoords.lat]
+        ],
+        elevation: true,
+        instructions: true
+      };
+    }
+
     // Call OpenRouteService Directions API
     const orsResponse = await fetch(
-      `https://api.openrouteservice.org/v2/directions/${profile}?api_key=${OPENROUTESERVICE_API_KEY}`,
+      `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
+          'Accept': 'application/json, application/geo+json',
+          'Authorization': OPENROUTESERVICE_API_KEY
         },
-        body: JSON.stringify({
-          coordinates: [
-            [startCoords.lng, startCoords.lat],
-            [endCoords.lng, endCoords.lat]
-          ],
-          format: 'geojson',
-          elevation: true,
-          extra_info: ['surface', 'waytype'],
-          instructions: true
-        })
+        body: JSON.stringify(requestBody)
       }
     );
 
@@ -62,6 +85,12 @@ serve(async (req) => {
     const orsData = await orsResponse.json();
     console.log('OpenRouteService response received');
 
+    // Check if we got valid features
+    if (!orsData.features || orsData.features.length === 0) {
+      console.error('No route features returned');
+      throw new Error('Could not generate route for these coordinates');
+    }
+
     // Extract route data
     const feature = orsData.features[0];
     const coordinates = feature.geometry.coordinates;
@@ -73,24 +102,17 @@ serve(async (req) => {
       lng: coord[0]
     }));
 
-    // Generate GPX from GeoJSON
+    // Generate GPX using the same request body
     const gpxResponse = await fetch(
-      `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
+      `https://api.openrouteservice.org/v2/directions/${profile}/gpx`,
       {
         method: 'POST',
         headers: {
-          'Authorization': OPENROUTESERVICE_API_KEY,
           'Content-Type': 'application/json',
-          'Accept': 'application/gpx+xml'
+          'Accept': 'application/gpx+xml',
+          'Authorization': OPENROUTESERVICE_API_KEY
         },
-        body: JSON.stringify({
-          coordinates: [
-            [startCoords.lng, startCoords.lat],
-            [endCoords.lng, endCoords.lat]
-          ],
-          format: 'gpx',
-          elevation: true
-        })
+        body: JSON.stringify(requestBody)
       }
     );
 
@@ -98,6 +120,8 @@ serve(async (req) => {
     if (gpxResponse.ok) {
       gpxData = await gpxResponse.text();
       console.log('GPX data generated successfully');
+    } else {
+      console.warn('Could not generate GPX, but route succeeded');
     }
 
     return new Response(

@@ -16,25 +16,52 @@ serve(async (req) => {
     
     console.log('Geocoding location:', location);
 
-    // Use Nominatim (OpenStreetMap) for geocoding - free and no API key required
-    const searchQuery = encodeURIComponent(location);
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=1&countrycodes=dk`,
+    // Add delay to respect Nominatim rate limits (1 request per second)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    await delay(1000);
+
+    // Try geocoding with country code first
+    let searchQuery = encodeURIComponent(location);
+    let response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=3&countrycodes=dk`,
       {
         headers: {
-          'User-Agent': 'CyclingRouteApp/1.0' // Required by Nominatim
+          'User-Agent': 'CyclingRouteApp/1.0',
+          'Accept-Language': 'da,en'
         }
       }
     );
 
-    if (!response.ok) {
-      throw new Error('Geocoding failed');
+    let data = await response.json();
+    console.log('Nominatim response with country filter:', data);
+    
+    // If no results with country filter, try without it
+    if (!data || data.length === 0) {
+      console.log('No results with DK filter, trying without country filter...');
+      await delay(1000); // Respect rate limit
+      
+      response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${searchQuery}&format=json&limit=3`,
+        {
+          headers: {
+            'User-Agent': 'CyclingRouteApp/1.0',
+            'Accept-Language': 'da,en'
+          }
+        }
+      );
+      
+      data = await response.json();
+      console.log('Nominatim response without country filter:', data);
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      console.error('Nominatim API error:', response.status, response.statusText);
+      throw new Error(`Geocoding API error: ${response.status}`);
+    }
     
     if (!data || data.length === 0) {
-      throw new Error('Location not found');
+      console.error('No geocoding results found for:', location);
+      throw new Error(`Kunne ikke finde lokationen: ${location}. Prøv med en større by eller et mere specifikt stednavn.`);
     }
 
     const result = data[0];
@@ -42,7 +69,9 @@ serve(async (req) => {
     console.log('Geocoded successfully:', {
       name: result.display_name,
       lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon)
+      lng: parseFloat(result.lon),
+      type: result.type,
+      importance: result.importance
     });
 
     return new Response(

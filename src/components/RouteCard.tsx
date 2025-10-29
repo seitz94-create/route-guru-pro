@@ -24,6 +24,7 @@ interface Route {
     lat: number;
     lng: number;
   }>;
+  gpxData?: string;
 }
 
 interface RouteCardProps {
@@ -46,12 +47,33 @@ const RouteCard = ({ route }: RouteCardProps) => {
     }
   };
 
-  const handleExportGPX = () => {
-    toast.info('GPX export coming soon! This feature will generate a downloadable GPX file.');
-  };
+  const handleDownloadGPX = () => {
+    if (!route.gpxData) {
+      toast.error('GPX data ikke tilgængelig for denne rute');
+      return;
+    }
 
-  const handleExportToDevice = (device: string) => {
-    toast.info(`${device} integration coming soon! This will sync directly to your device.`);
+    try {
+      // Create a blob from the GPX data
+      const blob = new Blob([route.gpxData], { type: 'application/gpx+xml' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create a temporary download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${route.name.toLowerCase().replace(/\s+/g, '-')}.gpx`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success('GPX fil downloadet! Importer den i Garmin Connect eller Wahoo app');
+    } catch (error) {
+      console.error('Error downloading GPX:', error);
+      toast.error('Kunne ikke downloade GPX fil');
+    }
   };
 
   // Generate static map URL using OpenStreetMap tiles
@@ -128,34 +150,16 @@ const RouteCard = ({ route }: RouteCardProps) => {
           </div>
         )}
 
-        <div className="pt-2 space-y-2">
-          <div className="flex gap-2">
-            <Button 
-              variant="default" 
-              className="flex-1"
-              onClick={handleExportGPX}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export GPX
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleExportToDevice('Garmin')}
-            >
-              Garmin
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleExportToDevice('Wahoo')}
-            >
-              Wahoo
-            </Button>
-          </div>
+        <div className="pt-2">
+          <Button 
+            variant="default" 
+            className="w-full"
+            onClick={handleDownloadGPX}
+            disabled={!route.gpxData}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download GPX til Garmin/Wahoo
+          </Button>
         </div>
       </CardContent>
     </Card>

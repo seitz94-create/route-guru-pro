@@ -25,31 +25,28 @@ serve(async (req) => {
     {
       "name": "Route name",
       "description": "Brief description of the route and what makes it special",
-      "distance": number (km),
-      "elevation": number (m),
+      "requestedDistance": number (the approximate desired distance in km),
       "difficulty": "Easy" | "Moderate" | "Hard" | "Expert",
-      "estimatedTime": "e.g., 2-3 hours",
       "highlights": ["Point 1", "Point 2", "Point 3"],
       "safetyNotes": "Important safety considerations",
       "startPoint": "Starting location name",
       "terrain": "road" | "gravel" | "mtb" | "mixed",
-      "coordinates": {
+      "startCoords": {
         "lat": number (latitude, e.g., 55.6761 for Copenhagen),
         "lng": number (longitude, e.g., 12.5683 for Copenhagen)
       },
-      "path": [
-        {"lat": number, "lng": number},
-        {"lat": number, "lng": number},
-        ... (minimum 5-10 waypoints that create a realistic route path)
-      ]
+      "endCoords": {
+        "lat": number (latitude - can be same as start for loops),
+        "lng": number (longitude - can be same as start for loops)
+      }
     }
     
     IMPORTANT: 
-    - Include realistic GPS coordinates for the starting point of each route
-    - Generate a complete route path with 5-10 waypoints that form a realistic cycling route
-    - The path should start at the coordinates point and create a loop or out-and-back route
+    - Include realistic GPS coordinates for start and end points
+    - For loop routes, make endCoords the same as startCoords
+    - For out-and-back routes, place endCoords at the turnaround point
     - Make sure coordinates match the location and country mentioned in user profile or route description
-    - Path waypoints should be spaced appropriately based on the total distance
+    - Choose coordinates that are approximately the requested distance apart
     
     Only return valid JSON array, no markdown formatting.`;
 
@@ -109,7 +106,53 @@ serve(async (req) => {
     suggestions = suggestions.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
     // Parse the JSON to validate it
-    const routes = JSON.parse(suggestions);
+    const aiRoutes = JSON.parse(suggestions);
+    
+    console.log('AI generated', aiRoutes.length, 'route concepts');
+
+    // Generate actual routes using OpenRouteService for each AI suggestion
+    const routePromises = aiRoutes.map(async (aiRoute: any) => {
+      try {
+        const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.get('Authorization') || '',
+          },
+          body: JSON.stringify({
+            startCoords: aiRoute.startCoords,
+            endCoords: aiRoute.endCoords,
+            terrain: aiRoute.terrain
+          })
+        });
+
+        if (!routeResponse.ok) {
+          console.error('Failed to generate route for:', aiRoute.name);
+          return null;
+        }
+
+        const routeData = await routeResponse.json();
+        
+        // Merge AI metadata with actual route data
+        return {
+          ...aiRoute,
+          distance: parseFloat(routeData.distance),
+          elevation: routeData.elevation,
+          estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
+          path: routeData.path,
+          coordinates: aiRoute.startCoords,
+          gpxData: routeData.gpxData
+        };
+      } catch (error) {
+        console.error('Error generating route:', error);
+        return null;
+      }
+    });
+
+    const generatedRoutes = await Promise.all(routePromises);
+    const routes = generatedRoutes.filter(r => r !== null);
+    
+    console.log('Successfully generated', routes.length, 'complete routes');
 
     return new Response(JSON.stringify({ routes }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

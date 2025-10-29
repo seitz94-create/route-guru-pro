@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ai-training-insights]
 verify_jwt = false
+
+[functions.generate-cycling-route]
+verify_jwt = false

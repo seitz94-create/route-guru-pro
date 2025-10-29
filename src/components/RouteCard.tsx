@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, Navigation, MapPin, Mountain, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import RouteMap from '@/components/RouteMap';
 
 interface Route {
   name: string;
@@ -56,12 +57,14 @@ const RouteCard = ({ route }: RouteCardProps) => {
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="relative h-48 bg-muted overflow-hidden">
-        <img 
-          src={mapUrl} 
-          alt={`Map of ${route.name}`}
-          className="w-full h-full object-cover"
-        />
+      <div className="relative h-48 overflow-hidden">
+        {route.coordinates ? (
+          <RouteMap lat={route.coordinates.lat} lng={route.coordinates.lng} />
+        ) : (
+          <div className="w-full h-48 bg-muted flex items-center justify-center text-xs text-muted-foreground">
+            Intet kort tilgængeligt
+          </div>
+        )}
         <div className="absolute top-3 right-3">
           <Badge className={getDifficultyColor(route.difficulty)}>
             {route.difficulty}

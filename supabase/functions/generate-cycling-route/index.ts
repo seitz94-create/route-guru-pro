@@ -40,9 +40,13 @@ serve(async (req) => {
       // For loop routes, use round_trip with user's preferred distance
       const targetDistance = distance ? distance * 1000 : 50000; // Convert km to meters
       
-      // Adjust route complexity based on elevation preference
-      // Higher elevation preference = more waypoints = more varied/hilly route
-      const points = elevation ? Math.min(Math.max(Math.floor(elevation / 200) + 3, 3), 10) : 3;
+      // Map elevation preference to waypoints (more waypoints = hillier route)
+      const elevationPointsMap: Record<string, number> = {
+        'flat': 3,
+        'hilly': 5,
+        'mountainous': 8
+      };
+      const points = elevationPointsMap[elevation as string] || 5;
       
       requestBody = {
         coordinates: [[startCoords.lng, startCoords.lat]],
@@ -57,7 +61,7 @@ serve(async (req) => {
         instructions: true
       };
       
-      console.log(`Using ${points} waypoints for elevation preference: ${elevation}m`);
+      console.log(`Using ${points} waypoints for elevation preference: ${elevation}`);
       
       // Add direction preference if specified
       if (direction && direction !== 'none') {
@@ -128,21 +132,17 @@ serve(async (req) => {
         ? ascentProp
         : (typeof ascentSummary === 'number' ? ascentSummary : null);
 
-      // If loop, try to adjust length to better match requested distance
+      // If loop, try to adjust length to better match requested distance (km is PRIMARY)
       if (isLoop && typeof distance === 'number' && distance > 0) {
         const diff = Math.abs(actualDistanceKmNum - distance) / distance;
-        const elevationTooLow = typeof elevation === 'number' && elevation > 0 && actualElevationNum !== null && actualElevationNum < elevation * 0.6;
 
-        if (diff > 0.15 || elevationTooLow) {
+        // Only retry if distance is off by more than 15% - elevation is secondary
+        if (diff > 0.15) {
           // Adjust length proportionally towards the target distance
-          if (diff > 0.15 && finalRequestBody?.options?.round_trip?.length) {
+          if (finalRequestBody?.options?.round_trip?.length) {
             const currentLength = finalRequestBody.options.round_trip.length;
             const factor = distance / actualDistanceKmNum;
             finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
-          }
-          // Nudge points upward if we need more climbing
-          if (elevationTooLow && finalRequestBody?.options?.round_trip?.points) {
-            finalRequestBody.options.round_trip.points = Math.min(10, finalRequestBody.options.round_trip.points + 1);
           }
           // Change seed to explore a different loop
           if (finalRequestBody?.options?.round_trip) {

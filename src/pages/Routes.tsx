@@ -17,7 +17,7 @@ const Routes = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [distance, setDistance] = useState('50');
-  const [elevation, setElevation] = useState('500');
+  const [elevation, setElevation] = useState<'flat' | 'hilly' | 'mountainous'>('hilly');
   const [terrain, setTerrain] = useState('road');
   const [direction, setDirection] = useState('none');
   const [routeType, setRouteType] = useState<'loop' | 'point-to-point'>('loop');
@@ -62,7 +62,7 @@ const Routes = () => {
         body: {
           preferences: {
             distance: parseInt(distance),
-            elevation: parseInt(elevation),
+            elevation,
             terrain,
             direction,
             routeType,
@@ -154,15 +154,17 @@ const Routes = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="elevation">{t('routes.elevation')} (m)</Label>
-                  <Input
-                    id="elevation"
-                    type="number"
-                    min="0"
-                    max="5000"
-                    value={elevation}
-                    onChange={(e) => setElevation(e.target.value)}
-                  />
+                  <Label htmlFor="elevation">Højdemeter Niveau</Label>
+                  <Select value={elevation} onValueChange={(value: 'flat' | 'hilly' | 'mountainous') => setElevation(value)}>
+                    <SelectTrigger id="elevation">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flat">Fladt (minimum stigning)</SelectItem>
+                      <SelectItem value="hilly">Bakket (moderat stigning)</SelectItem>
+                      <SelectItem value="mountainous">Bjergagtigt (maksimal stigning)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               

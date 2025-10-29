@@ -46,11 +46,21 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
       });
 
       // Use Thunderforest Outdoors map for better cycling route visibility
-      const apiKey = import.meta.env.VITE_THUNDERFOREST_API_KEY;
-      L.tileLayer(`https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${apiKey}`, {
-        attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 22,
-      }).addTo(leafletMapRef.current);
+      // Get your free API key at: https://www.thunderforest.com/
+      const apiKey = 'YOUR_THUNDERFOREST_API_KEY_HERE'; // Replace with your actual API key
+      
+      if (!apiKey || apiKey === 'YOUR_THUNDERFOREST_API_KEY_HERE') {
+        // Fallback to OpenStreetMap if no API key
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19,
+        }).addTo(leafletMapRef.current);
+      } else {
+        L.tileLayer(`https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${apiKey}`, {
+          attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 22,
+        }).addTo(leafletMapRef.current);
+      }
 
       L.marker([lat, lng]).addTo(leafletMapRef.current).bindPopup('Startpunkt');
     } else {

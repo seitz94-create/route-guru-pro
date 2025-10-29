@@ -45,9 +45,11 @@ const RouteMap: React.FC<RouteMapProps> = ({ lat, lng, path }) => {
         scrollWheelZoom: false,
       });
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
+      // Use Thunderforest Outdoors map for better cycling route visibility
+      const apiKey = import.meta.env.VITE_THUNDERFOREST_API_KEY;
+      L.tileLayer(`https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${apiKey}`, {
+        attribution: '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 22,
       }).addTo(leafletMapRef.current);
 
       L.marker([lat, lng]).addTo(leafletMapRef.current).bindPopup('Startpunkt');

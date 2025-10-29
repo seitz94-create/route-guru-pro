@@ -69,12 +69,28 @@ const Routes = () => {
       return;
     }
 
-    // Validate start location
+    // Validate and normalize start location
     const finalStartLocation = useHomeAddress ? profile?.location : startLocation;
     if (!finalStartLocation || finalStartLocation.trim().length === 0) {
       toast.error('Angiv venligst et startsted');
       return;
     }
+
+    // Normalize address for better geocoding when no commas are present
+    const normalizeLocation = (loc: string) => {
+      const base = String(loc || '').trim();
+      if (!base) return base;
+      if (base.includes(',')) return base; // already has components
+      const tokens = base.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 2) {
+        const lastTwo = tokens.slice(-2).join(' ');
+        return /denmark|danmark/i.test(base) ? lastTwo : `${lastTwo}, Denmark`;
+      }
+      return /denmark|danmark/i.test(base) ? base : `${base}, Denmark`;
+    };
+
+    const startForApi = normalizeLocation(finalStartLocation);
+    console.log('[Routes] Using start location for API:', startForApi);
 
     // Validate end location for point-to-point routes
     if (routeType === 'point-to-point' && (!endLocation || endLocation.trim().length === 0)) {
@@ -94,8 +110,8 @@ const Routes = () => {
             terrain,
             direction,
             routeType,
-            startLocation: finalStartLocation,
-            endLocation: routeType === 'point-to-point' ? endLocation : finalStartLocation
+            startLocation: startForApi,
+            endLocation: routeType === 'point-to-point' ? endLocation : startForApi
           },
           userProfile: profile
         }

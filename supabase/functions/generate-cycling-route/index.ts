@@ -24,14 +24,9 @@ serve(async (req) => {
     console.log('Generating route with:', { startCoords, endCoords, terrain, distance, direction, routeType, startLocation, endLocation });
 
     // Map terrain type to GraphHopper vehicle profile
-    const vehicleMap: Record<string, string> = {
-      'road': 'racingbike',
-      'gravel': 'bike',
-      'mtb': 'mtb',
-      'mixed': 'bike'
-    };
-    
-    const vehicle = vehicleMap[terrain] || 'bike';
+    // Note: Free GraphHopper API only supports 'car', 'bike', 'foot'
+    // Specialized profiles like 'racingbike' and 'mtb' require paid plans
+    const vehicle = 'bike'; // Use 'bike' for all cycling types
 
     // Check if this is a loop route
     const isLoop = routeType === 'loop' || (startCoords.lat === endCoords.lat && startCoords.lng === endCoords.lng);

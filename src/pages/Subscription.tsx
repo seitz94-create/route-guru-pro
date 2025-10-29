@@ -9,7 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 const Subscription = () => {
   const navigate = useNavigate();
-  const [currentPlan, setCurrentPlan] = useState<string>('free');
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     loadCurrentPlan();
@@ -18,8 +19,12 @@ const Subscription = () => {
   const loadCurrentPlan = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setIsLoggedIn(false);
+        return;
+      }
 
+      setIsLoggedIn(true);
       const { data, error } = await supabase
         .from('profiles')
         .select('subscription_plan')
@@ -105,7 +110,7 @@ const Subscription = () => {
 
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             {plans.map((plan, index) => {
-              const isCurrentPlan = plan.planKey === currentPlan;
+              const isCurrentPlan = isLoggedIn && plan.planKey === currentPlan;
               return (
                 <Card 
                   key={index} 

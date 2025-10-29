@@ -67,54 +67,62 @@ serve(async (req) => {
       console.log('End location geocoded:', endGeoData);
     }
 
-    // Call OpenRouteService to generate the actual route
-    const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.get('Authorization') || '',
-      },
-      body: JSON.stringify({
-        startCoords: startGeoData.coords,
-        endCoords: endGeoData.coords,
+    // Generate 3 different route suggestions in parallel
+    const routePromises = [1, 2, 3].map(async (variant) => {
+      const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.get('Authorization') || '',
+        },
+        body: JSON.stringify({
+          startCoords: startGeoData.coords,
+          endCoords: endGeoData.coords,
+          terrain: preferences.terrain,
+          distance: preferences.distance,
+          elevation: preferences.elevation,
+          direction: preferences.direction,
+          routeType: preferences.routeType,
+          startLocation: preferences.startLocation,
+          endLocation: preferences.endLocation,
+          variant // Pass variant to generate different routes
+        })
+      });
+
+      if (!routeResponse.ok) {
+        const errorText = await routeResponse.text();
+        console.error(`Failed to generate route variant ${variant}:`, errorText);
+        return null;
+      }
+
+      const routeData = await routeResponse.json();
+      
+      return {
+        name: `${preferences.startLocation}${isLoop ? ' Loop' : ` til ${preferences.endLocation}`} (Variant ${variant})`,
+        description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction && preferences.direction !== 'none' ? ` mod ${preferences.direction}` : ''}`,
+        distance: parseFloat(routeData.distance),
+        elevation: routeData.elevation,
+        difficulty: preferences.distance < 30 ? 'Easy' : preferences.distance < 60 ? 'Moderate' : 'Hard',
+        estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
+        highlights: routeData.highlights || [`Start: ${startGeoData.displayName}`, `Distance: ${routeData.distance}km`, `Elevation: ${routeData.elevation}m`],
+        safetyNotes: 'Vær opmærksom på trafik og vejrforhold',
+        startPoint: startGeoData.displayName,
         terrain: preferences.terrain,
-        distance: preferences.distance,
-        elevation: preferences.elevation,
-        direction: preferences.direction,
-        routeType: preferences.routeType,
-        startLocation: preferences.startLocation,
-        endLocation: preferences.endLocation
-      })
+        path: routeData.path,
+        coordinates: startGeoData.coords,
+        gpxData: routeData.gpxData
+      };
     });
 
-    if (!routeResponse.ok) {
-      const errorText = await routeResponse.text();
-      console.error('Failed to generate route:', errorText);
-      throw new Error('Could not generate route');
+    const routes = (await Promise.all(routePromises)).filter(route => route !== null);
+    
+    if (routes.length === 0) {
+      throw new Error('Could not generate any route variants');
     }
-
-    const routeData = await routeResponse.json();
     
-    // Return single route with all data
-    const route = {
-      name: `${preferences.startLocation}${isLoop ? ' Loop' : ` til ${preferences.endLocation}`}`,
-      description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction && preferences.direction !== 'none' ? ` mod ${preferences.direction}` : ''}`,
-      distance: parseFloat(routeData.distance),
-      elevation: routeData.elevation,
-      difficulty: preferences.distance < 30 ? 'Easy' : preferences.distance < 60 ? 'Moderate' : 'Hard',
-      estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
-      highlights: routeData.highlights || [`Start: ${startGeoData.displayName}`, `Distance: ${routeData.distance}km`, `Elevation: ${routeData.elevation}m`],
-      safetyNotes: 'Vær opmærksom på trafik og vejrforhold',
-      startPoint: startGeoData.displayName,
-      terrain: preferences.terrain,
-      path: routeData.path,
-      coordinates: startGeoData.coords,
-      gpxData: routeData.gpxData
-    };
-    
-    console.log('Successfully generated route');
+    console.log(`Successfully generated ${routes.length} route variants`);
 
-    return new Response(JSON.stringify({ routes: [route] }), {
+    return new Response(JSON.stringify({ routes }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

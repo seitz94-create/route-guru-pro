@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { startCoords, endCoords, terrain, distance, elevation, direction, routeType, startLocation, endLocation } = await req.json();
+    const { startCoords, endCoords, terrain, distance, elevation, direction, routeType, startLocation, endLocation, variant } = await req.json();
     const OPENROUTESERVICE_API_KEY = Deno.env.get('OPENROUTESERVICE_API_KEY');
     
     if (!OPENROUTESERVICE_API_KEY) {
@@ -54,14 +54,14 @@ serve(async (req) => {
           round_trip: {
             length: targetDistance,
             points: config.points,
-            seed: Math.floor(Math.random() * 100)
+            seed: variant ? variant * 100 + Math.floor(Math.random() * 50) : Math.floor(Math.random() * 100)
           }
         },
         elevation: true,
         instructions: true
       };
       
-      console.log(`Targeting ${config.minPerKm}-${config.maxPerKm}m/km elevation for ${elevation} with ${config.points} waypoints`);
+      console.log(`Targeting ${config.minPerKm}-${config.maxPerKm}m/km elevation for ${elevation} with ${config.points} waypoints (variant: ${variant || 'default'})`);
       
       // Add direction preference if specified
       if (direction && direction !== 'none') {

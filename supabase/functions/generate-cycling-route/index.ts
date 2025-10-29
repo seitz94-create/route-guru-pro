@@ -54,7 +54,7 @@ serve(async (req) => {
       };
       
       // Add direction preference if specified
-      if (direction) {
+      if (direction && direction !== 'none') {
         const bearingMap: Record<string, number> = {
           'north': 0,
           'east': 90,

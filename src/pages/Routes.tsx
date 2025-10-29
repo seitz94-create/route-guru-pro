@@ -19,7 +19,7 @@ const Routes = () => {
   const [distance, setDistance] = useState('50');
   const [elevation, setElevation] = useState('500');
   const [terrain, setTerrain] = useState('road');
-  const [direction, setDirection] = useState('');
+  const [direction, setDirection] = useState('none');
   const [routeType, setRouteType] = useState<'loop' | 'point-to-point'>('loop');
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
@@ -187,7 +187,7 @@ const Routes = () => {
                     <SelectValue placeholder="Vælg retning" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Ingen præference</SelectItem>
+                    <SelectItem value="none">Ingen præference</SelectItem>
                     <SelectItem value="north">Nord</SelectItem>
                     <SelectItem value="south">Syd</SelectItem>
                     <SelectItem value="east">Øst</SelectItem>

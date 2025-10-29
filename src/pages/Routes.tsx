@@ -9,9 +9,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Sparkles, Lock } from 'lucide-react';
+import { Sparkles, Lock, Loader2, CheckCircle, XCircle, MapPin } from 'lucide-react';
 import RouteCard from '@/components/RouteCard';
 import { useNavigate } from 'react-router-dom';
+import { useAddressValidation } from '@/hooks/useAddressValidation';
 
 const Routes = () => {
   const { t } = useLanguage();
@@ -28,6 +29,11 @@ const Routes = () => {
   const [routes, setRoutes] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [hasAccess, setHasAccess] = useState(false);
+
+  const { status: startStatus, validatedAddress: validatedStart, errorMessage: startError } = 
+    useAddressValidation(useHomeAddress ? '' : startLocation, 1000);
+  const { status: endStatus, validatedAddress: validatedEnd, errorMessage: endError } = 
+    useAddressValidation(routeType === 'point-to-point' ? endLocation : '', 1000);
 
   useEffect(() => {
     loadProfile();
@@ -73,6 +79,17 @@ const Routes = () => {
     const finalStartLocation = useHomeAddress ? profile?.location : startLocation;
     if (!finalStartLocation || finalStartLocation.trim().length === 0) {
       toast.error('Angiv venligst et startsted');
+      return;
+    }
+
+    // Check validation status
+    if (!useHomeAddress && startStatus === 'invalid') {
+      toast.error('Angiv venligst en gyldig startadresse');
+      return;
+    }
+
+    if (routeType === 'point-to-point' && endStatus === 'invalid') {
+      toast.error('Angiv venligst en gyldig slutadresse');
       return;
     }
 
@@ -189,25 +206,79 @@ const Routes = () => {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="startLocation">Startsted</Label>
-                    <Input
-                      id="startLocation"
-                      placeholder="f.eks. Roskilde, København"
-                      value={startLocation}
-                      onChange={(e) => setStartLocation(e.target.value)}
-                      disabled={useHomeAddress}
-                      className={useHomeAddress ? 'bg-muted' : ''}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="startLocation"
+                        placeholder="f.eks. Roskilde, Denmark"
+                        value={startLocation}
+                        onChange={(e) => setStartLocation(e.target.value)}
+                        disabled={useHomeAddress}
+                        className={
+                          useHomeAddress ? 'bg-muted pr-10' :
+                          startStatus === 'invalid' ? 'border-red-500 pr-10' :
+                          startStatus === 'valid' ? 'border-green-500 pr-10' : 'pr-10'
+                        }
+                      />
+                      {!useHomeAddress && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {startStatus === 'validating' && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                          {startStatus === 'valid' && (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                          {startStatus === 'invalid' && (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {!useHomeAddress && startStatus === 'valid' && validatedStart && (
+                      <p className="text-xs text-green-600 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {validatedStart}
+                      </p>
+                    )}
+                    {!useHomeAddress && startStatus === 'invalid' && startError && (
+                      <p className="text-xs text-red-600">{startError}</p>
+                    )}
                   </div>
                   
                   {routeType === 'point-to-point' && (
                     <div className="space-y-2">
                       <Label htmlFor="endLocation">Slutsted</Label>
-                      <Input
-                        id="endLocation"
-                        placeholder="f.eks. Aarhus, Odense"
-                        value={endLocation}
-                        onChange={(e) => setEndLocation(e.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="endLocation"
+                          placeholder="f.eks. Aarhus, Denmark"
+                          value={endLocation}
+                          onChange={(e) => setEndLocation(e.target.value)}
+                          className={
+                            endStatus === 'invalid' ? 'border-red-500 pr-10' :
+                            endStatus === 'valid' ? 'border-green-500 pr-10' : 'pr-10'
+                          }
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {endStatus === 'validating' && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                          {endStatus === 'valid' && (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                          {endStatus === 'invalid' && (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                      </div>
+                      {endStatus === 'valid' && validatedEnd && (
+                        <p className="text-xs text-green-600 flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {validatedEnd}
+                        </p>
+                      )}
+                      {endStatus === 'invalid' && endError && (
+                        <p className="text-xs text-red-600">{endError}</p>
+                      )}
                     </div>
                   )}
                 </div>

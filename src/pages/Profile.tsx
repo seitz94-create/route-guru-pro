@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Crown, Activity, CheckCircle, XCircle } from 'lucide-react';
+import { Crown, Activity, CheckCircle, XCircle, Loader2, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAddressValidation } from '@/hooks/useAddressValidation';
 
 const Profile = () => {
   const { t } = useLanguage();
@@ -28,6 +29,8 @@ const Profile = () => {
     weight_kg: 0,
     subscription_plan: 'free',
   });
+
+  const { status: locationStatus, validatedAddress, errorMessage: locationError } = useAddressValidation(profile.location);
 
   useEffect(() => {
     loadProfile();
@@ -114,6 +117,11 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
+    if (profile.location && locationStatus === 'invalid') {
+      toast.error('Angiv venligst en gyldig adresse før gemning');
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -128,9 +136,9 @@ const Profile = () => {
 
       if (error) throw error;
       
-      toast.success('Profile updated successfully!');
+      toast.success('Profil opdateret!');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update profile');
+      toast.error(error.message || 'Kunne ikke opdatere profil');
     } finally {
       setLoading(false);
     }
@@ -239,12 +247,38 @@ const Profile = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="location">{t('profile.location')}</Label>
-                <Input
-                  id="location"
-                  value={profile.location}
-                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                  placeholder="City, Country"
-                />
+                <div className="relative">
+                  <Input
+                    id="location"
+                    value={profile.location}
+                    onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                    placeholder="f.eks. Roskilde, Denmark"
+                    className={
+                      locationStatus === 'invalid' ? 'border-red-500 pr-10' :
+                      locationStatus === 'valid' ? 'border-green-500 pr-10' : 'pr-10'
+                    }
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {locationStatus === 'validating' && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                    {locationStatus === 'valid' && (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    )}
+                    {locationStatus === 'invalid' && (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                </div>
+                {locationStatus === 'valid' && validatedAddress && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {validatedAddress}
+                  </p>
+                )}
+                {locationStatus === 'invalid' && locationError && (
+                  <p className="text-xs text-red-600">{locationError}</p>
+                )}
               </div>
               
               <div className="grid md:grid-cols-2 gap-6">

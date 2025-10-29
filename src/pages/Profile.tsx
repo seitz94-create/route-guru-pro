@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Crown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
     full_name: '',
@@ -20,6 +24,7 @@ const Profile = () => {
     weekly_training_hours: 5,
     ftp: 0,
     weight_kg: 0,
+    subscription_plan: 'free',
   });
 
   useEffect(() => {
@@ -48,6 +53,7 @@ const Profile = () => {
           weekly_training_hours: data.weekly_training_hours || 5,
           ftp: data.ftp || 0,
           weight_kg: data.weight_kg || 0,
+          subscription_plan: data.subscription_plan || 'free',
         });
       }
     } catch (error: any) {
@@ -85,6 +91,37 @@ const Profile = () => {
       <div className="container mx-auto px-4 pt-24 pb-20">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-4xl font-bold mb-8 text-foreground">{t('profile.title')}</h1>
+          
+          <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/20">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-primary" />
+                  Dit Abonnement
+                </CardTitle>
+                <Badge 
+                  variant={profile.subscription_plan === 'premium' ? 'default' : profile.subscription_plan === 'pro' ? 'secondary' : 'outline'}
+                  className="text-sm"
+                >
+                  {profile.subscription_plan === 'free' ? 'Gratis' : profile.subscription_plan === 'pro' ? 'Pro' : 'Premium'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                {profile.subscription_plan === 'free' && 'Du har vores gratis plan. Opgrader for at få adgang til AI træningsråd og avancerede funktioner.'}
+                {profile.subscription_plan === 'pro' && 'Du har Pro-planen med AI træningsråd og Garmin/Wahoo sync.'}
+                {profile.subscription_plan === 'premium' && 'Du har Premium-planen med alle funktioner inkluderet!'}
+              </p>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate('/subscription')}
+                className="w-full"
+              >
+                {profile.subscription_plan === 'free' ? 'Opgrader Abonnement' : 'Se Abonnementer'}
+              </Button>
+            </CardContent>
+          </Card>
           
           <Card className="shadow-card">
             <CardHeader>

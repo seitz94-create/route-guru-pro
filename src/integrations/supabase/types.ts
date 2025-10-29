@@ -98,6 +98,7 @@ export type Database = {
           id: string
           location: string | null
           preferred_language: string | null
+          subscription_plan: string | null
           updated_at: string | null
           weekly_training_hours: number | null
           weight_kg: number | null
@@ -111,6 +112,7 @@ export type Database = {
           id: string
           location?: string | null
           preferred_language?: string | null
+          subscription_plan?: string | null
           updated_at?: string | null
           weekly_training_hours?: number | null
           weight_kg?: number | null
@@ -124,6 +126,7 @@ export type Database = {
           id?: string
           location?: string | null
           preferred_language?: string | null
+          subscription_plan?: string | null
           updated_at?: string | null
           weekly_training_hours?: number | null
           weight_kg?: number | null

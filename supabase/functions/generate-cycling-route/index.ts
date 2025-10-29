@@ -163,47 +163,25 @@ serve(async (req) => {
       // Acceptance / adjustment logic
       if (isLoop && typeof distance === 'number' && distance > 0) {
         const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
-        const elevationTooLow = actualMetersPerKm < targetConfig.minPerKm * 0.7;
-        const elevationTooHigh = actualMetersPerKm > targetConfig.maxPerKm * 1.3;
 
-        // If distance is within 10%, accept immediately (km is primary)
-        if (distanceDiff <= 0.10) {
+        // If distance is within 5%, accept immediately (km is primary)
+        if (distanceDiff <= 0.05) {
           finalFeature = feature;
           finalSummary = summary;
           break;
         }
 
-        // If distance is off, adjust it (PRIMARY concern) without changing seed
-        if (distanceDiff > 0.10) {
+        // If distance is off by more than 5%, adjust it aggressively
+        if (distanceDiff > 0.05) {
           if (finalRequestBody?.options?.round_trip?.length) {
             const currentLength = finalRequestBody.options.round_trip.length;
-            const factor = distance / actualDistanceKmNum;
+            // Be more aggressive in the correction factor
+            const factor = Math.pow(distance / actualDistanceKmNum, 1.2);
             finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
           }
-          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length`);
+          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length aggressively`);
           attempt++;
           if (attempt < maxAttempts) continue;
-        }
-
-        // Distance ok but elevation off: try to adjust points/seed
-        if (distanceDiff < 0.15 && (elevationTooLow || elevationTooHigh)) {
-          if (elevationTooLow && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points < 10) {
-            finalRequestBody.options.round_trip.points += 1;
-            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
-            console.log(`Elevation too low (${actualMetersPerKm.toFixed(1)}m/km), increasing waypoints to ${finalRequestBody.options.round_trip.points}`);
-            attempt++;
-            if (attempt < maxAttempts) continue;
-          } else if (elevationTooHigh && finalRequestBody?.options?.round_trip?.points && finalRequestBody.options.round_trip.points > 3) {
-            finalRequestBody.options.round_trip.points -= 1;
-            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
-            console.log(`Elevation too high (${actualMetersPerKm.toFixed(1)}m/km), decreasing waypoints to ${finalRequestBody.options.round_trip.points}`);
-            attempt++;
-            if (attempt < maxAttempts) continue;
-          } else {
-            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
-            attempt++;
-            if (attempt < maxAttempts) continue;
-          }
         }
       }
 

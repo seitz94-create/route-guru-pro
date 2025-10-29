@@ -111,6 +111,13 @@ const Subscription = () => {
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             {plans.map((plan, index) => {
               const isCurrentPlan = isLoggedIn && plan.planKey === currentPlan;
+              
+              // Determine if this is a downgrade
+              const planHierarchy = { free: 0, premium: 1, pro: 2 };
+              const currentPlanValue = planHierarchy[currentPlan as keyof typeof planHierarchy] || 0;
+              const targetPlanValue = planHierarchy[plan.planKey];
+              const isDowngrade = isLoggedIn && targetPlanValue < currentPlanValue;
+              
               return (
                 <Card 
                   key={index} 
@@ -152,11 +159,11 @@ const Subscription = () => {
                   
                   <Button 
                     className="w-full" 
-                    variant={isCurrentPlan ? 'outline' : plan.variant}
+                    variant={isCurrentPlan || isDowngrade ? 'outline' : plan.variant}
                     onClick={() => navigate('/auth')}
-                    disabled={isCurrentPlan}
+                    disabled={isCurrentPlan || isDowngrade}
                   >
-                    {isCurrentPlan ? 'Din nuværende plan' : plan.cta}
+                    {isCurrentPlan ? 'Din nuværende plan' : isDowngrade ? 'Ikke tilgængelig' : plan.cta}
                   </Button>
                 </CardContent>
               </Card>

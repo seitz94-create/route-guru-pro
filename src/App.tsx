@@ -11,6 +11,7 @@ import Training from "./pages/Training";
 import Profile from "./pages/Profile";
 import Community from "./pages/Community";
 import Subscription from "./pages/Subscription";
+import StravaCallback from "./pages/StravaCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/community" element={<Community />} />
             <Route path="/subscription" element={<Subscription />} />
+            <Route path="/strava-callback" element={<StravaCallback />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

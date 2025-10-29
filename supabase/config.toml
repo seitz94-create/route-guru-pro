@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.geocode-location]
 verify_jwt = false
+
+[functions.strava-oauth-callback]
+verify_jwt = false
+
+[functions.upload-to-strava]
+verify_jwt = true

@@ -9,13 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Crown } from 'lucide-react';
+import { Crown, Activity, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [stravaLoading, setStravaLoading] = useState(false);
   const [profile, setProfile] = useState({
     full_name: '',
     location: '',
@@ -29,6 +31,7 @@ const Profile = () => {
 
   useEffect(() => {
     loadProfile();
+    checkStravaConnection();
   }, []);
 
   const loadProfile = async () => {
@@ -58,6 +61,55 @@ const Profile = () => {
       }
     } catch (error: any) {
       console.error('Error loading profile:', error);
+    }
+  };
+
+  const checkStravaConnection = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('strava_connections')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      setStravaConnected(!!data && !error);
+    } catch (error) {
+      console.error('Error checking Strava connection:', error);
+    }
+  };
+
+  const handleConnectStrava = () => {
+    const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID || '138946';
+    const redirectUri = `${window.location.origin}/strava-callback`;
+    const scope = 'activity:write,activity:read_all';
+    
+    const stravaAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}&approval_prompt=force`;
+    
+    window.location.href = stravaAuthUrl;
+  };
+
+  const handleDisconnectStrava = async () => {
+    setStravaLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('strava_connections')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      
+      setStravaConnected(false);
+      toast.success('Strava afbrudt!');
+    } catch (error: any) {
+      toast.error(error.message || 'Kunne ikke afbryde Strava');
+    } finally {
+      setStravaLoading(false);
     }
   };
 
@@ -120,6 +172,54 @@ const Profile = () => {
               >
                 {profile.subscription_plan === 'free' ? 'Opgrader Abonnement' : 'Se Abonnementer'}
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card mb-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-orange-500" />
+                  Strava Integration
+                </CardTitle>
+                {stravaConnected ? (
+                  <Badge variant="default" className="gap-1 bg-green-500 hover:bg-green-600">
+                    <CheckCircle className="h-3 w-3" />
+                    Forbundet
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1">
+                    <XCircle className="h-3 w-3" />
+                    Ikke forbundet
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                {stravaConnected 
+                  ? 'Din Strava konto er forbundet. Du kan nu uploade ruter direkte til Strava!'
+                  : 'Forbind din Strava konto for at uploade genererede ruter direkte til din Strava profil.'}
+              </p>
+              {stravaConnected ? (
+                <Button 
+                  variant="outline" 
+                  onClick={handleDisconnectStrava}
+                  disabled={stravaLoading}
+                  className="w-full"
+                >
+                  {stravaLoading ? 'Afbryder...' : 'Afbryd Strava'}
+                </Button>
+              ) : (
+                <Button 
+                  variant="default" 
+                  onClick={handleConnectStrava}
+                  className="w-full bg-orange-500 hover:bg-orange-600"
+                >
+                  <Activity className="h-4 w-4 mr-2" />
+                  Forbind med Strava
+                </Button>
+              )}
             </CardContent>
           </Card>
           

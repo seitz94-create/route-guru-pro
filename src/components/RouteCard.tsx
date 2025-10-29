@@ -1,9 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, Navigation, MapPin, Mountain, Clock, AlertCircle } from 'lucide-react';
+import { Download, Navigation, MapPin, Mountain, Clock, AlertCircle, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import RouteMap from '@/components/RouteMap';
+import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
 
 interface Route {
   name: string;
@@ -32,6 +34,8 @@ interface RouteCardProps {
 }
 
 const RouteCard = ({ route }: RouteCardProps) => {
+  const [uploadingToStrava, setUploadingToStrava] = useState(false);
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty.toLowerCase()) {
       case 'easy':
@@ -73,6 +77,47 @@ const RouteCard = ({ route }: RouteCardProps) => {
     } catch (error) {
       console.error('Error downloading GPX:', error);
       toast.error('Kunne ikke downloade GPX fil');
+    }
+  };
+
+  const handleUploadToStrava = async () => {
+    if (!route.gpxData) {
+      toast.error('GPX data ikke tilgængelig for denne rute');
+      return;
+    }
+
+    setUploadingToStrava(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Du skal være logget ind');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('upload-to-strava', {
+        body: {
+          routeName: route.name,
+          gpxData: route.gpxData,
+          description: route.description,
+          distance: route.distance,
+          activityType: 'Ride',
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success('Rute uploadet til Strava! 🚴‍♂️');
+      }
+    } catch (error: any) {
+      console.error('Error uploading to Strava:', error);
+      if (error.message?.includes('not connected')) {
+        toast.error('Forbind din Strava konto i Profil først');
+      } else {
+        toast.error('Kunne ikke uploade til Strava');
+      }
+    } finally {
+      setUploadingToStrava(false);
     }
   };
 
@@ -150,7 +195,7 @@ const RouteCard = ({ route }: RouteCardProps) => {
           </div>
         )}
 
-        <div className="pt-2">
+        <div className="pt-2 space-y-2">
           <Button 
             variant="default" 
             className="w-full"
@@ -159,6 +204,16 @@ const RouteCard = ({ route }: RouteCardProps) => {
           >
             <Download className="w-4 h-4 mr-2" />
             Download GPX til Garmin/Wahoo
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            className="w-full border-orange-500/20 hover:bg-orange-500/10"
+            onClick={handleUploadToStrava}
+            disabled={!route.gpxData || uploadingToStrava}
+          >
+            <Activity className="w-4 h-4 mr-2" />
+            {uploadingToStrava ? 'Uploader...' : 'Upload til Strava'}
           </Button>
         </div>
       </CardContent>

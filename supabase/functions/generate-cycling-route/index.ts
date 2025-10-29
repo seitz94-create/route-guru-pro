@@ -83,47 +83,93 @@ serve(async (req) => {
       };
     }
 
-    // Call OpenRouteService Directions API
-    const orsResponse = await fetch(
-      `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, application/geo+json',
-          'Authorization': OPENROUTESERVICE_API_KEY
-        },
-        body: JSON.stringify(requestBody)
+    // Iteratively call OpenRouteService to better match requested distance/elevation (loops only)
+    const maxAttempts = isLoop ? 3 : 1;
+    let attempt = 0;
+    let finalFeature: any = null;
+    let finalSummary: any = null;
+    let finalRequestBody: any = requestBody;
+
+    while (attempt < maxAttempts) {
+      const orsResponse = await fetch(
+        `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, application/geo+json',
+            'Authorization': OPENROUTESERVICE_API_KEY
+          },
+          body: JSON.stringify(finalRequestBody)
+        }
+      );
+
+      if (!orsResponse.ok) {
+        const errorText = await orsResponse.text();
+        console.error('OpenRouteService error:', orsResponse.status, errorText);
+        throw new Error(`OpenRouteService error: ${orsResponse.status}`);
       }
-    );
 
-    if (!orsResponse.ok) {
-      const errorText = await orsResponse.text();
-      console.error('OpenRouteService error:', orsResponse.status, errorText);
-      throw new Error(`OpenRouteService error: ${orsResponse.status}`);
+      const orsData = await orsResponse.json();
+      console.log(`OpenRouteService response received (attempt ${attempt + 1}/${maxAttempts})`);
+
+      if (!orsData.features || orsData.features.length === 0) {
+        console.error('No route features returned');
+        throw new Error('Could not generate route for these coordinates');
+      }
+
+      const feature = orsData.features[0];
+      const summary = feature.properties.summary;
+
+      const actualDistanceKmNum = (summary.distance / 1000);
+      const ascentProp = feature.properties?.ascent;
+      const ascentSummary = feature.properties?.summary?.ascent;
+      const actualElevationNum = typeof ascentProp === 'number'
+        ? ascentProp
+        : (typeof ascentSummary === 'number' ? ascentSummary : null);
+
+      // If loop, try to adjust length to better match requested distance
+      if (isLoop && typeof distance === 'number' && distance > 0) {
+        const diff = Math.abs(actualDistanceKmNum - distance) / distance;
+        const elevationTooLow = typeof elevation === 'number' && elevation > 0 && actualElevationNum !== null && actualElevationNum < elevation * 0.6;
+
+        if (diff > 0.15 || elevationTooLow) {
+          // Adjust length proportionally towards the target distance
+          if (diff > 0.15 && finalRequestBody?.options?.round_trip?.length) {
+            const currentLength = finalRequestBody.options.round_trip.length;
+            const factor = distance / actualDistanceKmNum;
+            finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
+          }
+          // Nudge points upward if we need more climbing
+          if (elevationTooLow && finalRequestBody?.options?.round_trip?.points) {
+            finalRequestBody.options.round_trip.points = Math.min(10, finalRequestBody.options.round_trip.points + 1);
+          }
+          // Change seed to explore a different loop
+          if (finalRequestBody?.options?.round_trip) {
+            finalRequestBody.options.round_trip.seed = Math.floor(Math.random() * 100);
+          }
+
+          attempt++;
+          // Try again with adjusted parameters
+          if (attempt < maxAttempts) continue;
+        }
+      }
+
+      // Accept this route
+      finalFeature = feature;
+      finalSummary = summary;
+      break;
     }
 
-    const orsData = await orsResponse.json();
-    console.log('OpenRouteService response received');
-
-    // Check if we got valid features
-    if (!orsData.features || orsData.features.length === 0) {
-      console.error('No route features returned');
-      throw new Error('Could not generate route for these coordinates');
+    if (!finalFeature || !finalSummary) {
+      throw new Error('Failed to generate a suitable route');
     }
 
-    // Extract route data
-    const feature = orsData.features[0];
-    const coordinates = feature.geometry.coordinates;
-    const summary = feature.properties.summary;
-    
     // Convert GeoJSON coordinates to lat/lng format
-    const path = coordinates.map((coord: number[]) => ({
-      lat: coord[1],
-      lng: coord[0]
-    }));
+    const coordinates = finalFeature.geometry.coordinates;
+    const path = coordinates.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }));
 
-    // Generate GPX using the same request body
+    // Generate GPX using the final request body
     const gpxResponse = await fetch(
       `https://api.openrouteservice.org/v2/directions/${profile}/gpx`,
       {
@@ -133,7 +179,7 @@ serve(async (req) => {
           'Accept': 'application/gpx+xml',
           'Authorization': OPENROUTESERVICE_API_KEY
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(finalRequestBody)
       }
     );
 
@@ -145,17 +191,21 @@ serve(async (req) => {
       console.warn('Could not generate GPX, but route succeeded');
     }
 
-    const actualDistance = (summary.distance / 1000).toFixed(1);
-    const actualElevation = Math.round(summary.ascent);
-    
-    console.log(`Route generated - Requested: ${distance}km/${elevation}m, Actual: ${actualDistance}km/${actualElevation}m`);
+    const actualDistance = (finalSummary.distance / 1000).toFixed(1);
+    const ascentPropFinal = finalFeature.properties?.ascent;
+    const ascentSummaryFinal = finalFeature.properties?.summary?.ascent;
+    const actualElevation = typeof ascentPropFinal === 'number'
+      ? Math.round(ascentPropFinal)
+      : (typeof ascentSummaryFinal === 'number' ? Math.round(ascentSummaryFinal) : null);
+
+    console.log(`Route generated - Requested: ${distance}km/${elevation}m, Actual: ${actualDistance}km/${actualElevation ?? 'n/a'}m`);
 
     return new Response(
       JSON.stringify({
         path,
-        distance: actualDistance, // Convert to km
-        elevation: actualElevation, // Elevation gain in meters
-        duration: Math.round(summary.duration / 60), // Convert to minutes
+        distance: actualDistance,
+        elevation: actualElevation,
+        duration: Math.round(finalSummary.duration / 60),
         gpxData,
         requestedDistance: distance,
         requestedElevation: elevation

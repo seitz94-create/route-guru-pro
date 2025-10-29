@@ -21,25 +21,48 @@ serve(async (req) => {
 
     const isLoop = preferences.routeType === 'loop' || !preferences.endLocation;
     
-    console.log('Geocoding start location:', preferences.startLocation);
+    // Helper: Geocode with fallbacks (try variants like adding country or using only city)
+    const geocodeWithFallback = async (location: string) => {
+      console.log('Geocoding start location (with fallback):', location);
+      const makeCall = async (loc: string) => {
+        return await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-location`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.get('Authorization') || '',
+          },
+          body: JSON.stringify({ location: loc })
+        });
+      };
 
-    // Geocode start location using Nominatim
-    const startGeoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-location`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.get('Authorization') || '',
-      },
-      body: JSON.stringify({
-        location: preferences.startLocation
-      })
-    });
+      const candidates: string[] = [];
+      const base = String(location).trim();
+      if (base) candidates.push(base);
+      if (!/denmark/i.test(base)) candidates.push(`${base}, Denmark`);
+      const parts = base.split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        const last = parts[parts.length - 1];
+        if (last) candidates.push(last);
+        if (last && !/denmark/i.test(last)) candidates.push(`${last}, Denmark`);
+      }
 
-    if (!startGeoResponse.ok) {
-      throw new Error('Could not find start location');
-    }
+      for (const cand of candidates) {
+        console.log('Trying geocode candidate:', cand);
+        const resp = await makeCall(cand);
+        if (resp.ok) {
+          const data = await resp.json();
+          console.log('Geocode succeeded with candidate:', cand);
+          return { data, used: cand };
+        } else {
+          const errText = await resp.text();
+          console.warn('Geocode failed for candidate:', cand, errText);
+        }
+      }
+      throw new Error(`Could not geocode location: ${location}`);
+    };
 
-    const startGeoData = await startGeoResponse.json();
+    // Start location geocoding with fallback
+    const { data: startGeoData } = await geocodeWithFallback(preferences.startLocation);
     console.log('Start location geocoded:', startGeoData);
 
     let endGeoData = startGeoData; // Default to same as start for loops
@@ -47,23 +70,8 @@ serve(async (req) => {
     // Geocode end location if point-to-point
     if (!isLoop && preferences.endLocation) {
       console.log('Geocoding end location:', preferences.endLocation);
-      
-      const endGeoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-location`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': req.headers.get('Authorization') || '',
-        },
-        body: JSON.stringify({
-          location: preferences.endLocation
-        })
-      });
-
-      if (!endGeoResponse.ok) {
-        throw new Error('Could not find end location');
-      }
-
-      endGeoData = await endGeoResponse.json();
+      const { data: endData } = await geocodeWithFallback(preferences.endLocation);
+      endGeoData = endData;
       console.log('End location geocoded:', endGeoData);
     }
 

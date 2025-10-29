@@ -15,217 +15,189 @@ serve(async (req) => {
 
   try {
     const { startCoords, endCoords, terrain, distance, elevation, direction, routeType, startLocation, endLocation, variant } = await req.json();
-    const OPENROUTESERVICE_API_KEY = Deno.env.get('OPENROUTESERVICE_API_KEY');
+    const GRAPHHOPPER_API_KEY = Deno.env.get('GRAPHHOPPER_API_KEY');
     
-    if (!OPENROUTESERVICE_API_KEY) {
-      throw new Error('OPENROUTESERVICE_API_KEY is not configured');
+    if (!GRAPHHOPPER_API_KEY) {
+      throw new Error('GRAPHHOPPER_API_KEY is not configured');
     }
 
     console.log('Generating route with:', { startCoords, endCoords, terrain, distance, direction, routeType, startLocation, endLocation });
 
-    // Map terrain type to OpenRouteService profile
-    const profileMap: Record<string, string> = {
-      'road': 'cycling-road',
-      'gravel': 'cycling-regular',
-      'mtb': 'cycling-mountain',
-      'mixed': 'cycling-regular'
+    // Map terrain type to GraphHopper vehicle profile
+    const vehicleMap: Record<string, string> = {
+      'road': 'racingbike',
+      'gravel': 'bike',
+      'mtb': 'mtb',
+      'mixed': 'bike'
     };
     
-    const profile = profileMap[terrain] || 'cycling-regular';
+    const vehicle = vehicleMap[terrain] || 'bike';
 
     // Check if this is a loop route
     const isLoop = routeType === 'loop' || (startCoords.lat === endCoords.lat && startCoords.lng === endCoords.lng);
     
-    let requestBody: any;
+    let routeParams: any = {
+      key: GRAPHHOPPER_API_KEY,
+      vehicle: vehicle,
+      points_encoded: false,
+      elevation: true,
+      calc_points: true,
+      instructions: false
+    };
     
     if (isLoop) {
-      // For loop routes, use round_trip with user's preferred distance
+      // For loop routes, use round_trip algorithm
       const targetDistance = distance ? distance * 1000 : 50000; // Convert km to meters
       
-      // Map elevation preference to target meters per km and waypoints
-      const elevationConfig: Record<string, { minPerKm: number, maxPerKm: number, points: number }> = {
-        'flat': { minPerKm: 5, maxPerKm: 10, points: 3 },
-        'hilly': { minPerKm: 10, maxPerKm: 15, points: 5 },
-        'mountainous': { minPerKm: 15, maxPerKm: 25, points: 8 }
-      };
-      const config = elevationConfig[elevation as string] || elevationConfig['hilly'];
+      routeParams.point = `${startCoords.lat},${startCoords.lng}`;
+      routeParams.algorithm = 'round_trip';
+      routeParams['round_trip.distance'] = targetDistance;
+      routeParams['round_trip.seed'] = variant ? variant * 100 + Math.floor(Math.random() * 50) : Math.floor(Math.random() * 100);
       
-      requestBody = {
-        coordinates: [[startCoords.lng, startCoords.lat]],
-        options: {
-          round_trip: {
-            length: targetDistance,
-            points: config.points,
-            seed: variant ? variant * 100 + Math.floor(Math.random() * 50) : Math.floor(Math.random() * 100)
-          }
-        },
-        elevation: true,
-        instructions: true
-      };
+      console.log(`Generating round trip: ${distance}km from ${startCoords.lat},${startCoords.lng} (variant: ${variant || 'default'})`);
       
-      console.log(`Targeting ${config.minPerKm}-${config.maxPerKm}m/km elevation for ${elevation} with ${config.points} waypoints (variant: ${variant || 'default'})`);
-      
-      // Add direction preference if specified
+      // Add direction preference if specified (GraphHopper uses heading in degrees)
       if (direction && direction !== 'none') {
-        const bearingMap: Record<string, number> = {
+        const headingMap: Record<string, number> = {
           'north': 0,
           'east': 90,
           'south': 180,
           'west': 270
         };
-        if (bearingMap[direction.toLowerCase()]) {
-          requestBody.options.round_trip.bearing = bearingMap[direction.toLowerCase()];
+        if (headingMap[direction.toLowerCase()]) {
+          routeParams.heading = headingMap[direction.toLowerCase()];
         }
       }
     } else {
       // For point-to-point routes
-      requestBody = {
-        coordinates: [
-          [startCoords.lng, startCoords.lat],
-          [endCoords.lng, endCoords.lat]
-        ],
-        elevation: true,
-        instructions: true
-      };
+      routeParams.point = [
+        `${startCoords.lat},${startCoords.lng}`,
+        `${endCoords.lat},${endCoords.lng}`
+      ];
     }
 
-    // Iteratively call OpenRouteService to match both distance AND elevation level (loops only)
+    // Call GraphHopper API with iterative distance adjustments for loops
     const maxAttempts = isLoop ? 4 : 1;
     let attempt = 0;
-    let finalFeature: any = null;
-    let finalSummary: any = null;
-    let finalRequestBody: any = requestBody;
+    let finalRoute: any = null;
+    let finalParams: any = { ...routeParams };
     
     // Track best candidate by distance difference
-    let bestFeature: any = null;
-    let bestSummary: any = null;
-    let bestRequestBody: any = null;
+    let bestRoute: any = null;
+    let bestParams: any = null;
     let bestDiff = Number.POSITIVE_INFINITY;
-    
-    // Get elevation targets for loop routes
-    const elevationConfig: Record<string, { minPerKm: number, maxPerKm: number, points: number }> = {
-      'flat': { minPerKm: 5, maxPerKm: 10, points: 3 },
-      'hilly': { minPerKm: 10, maxPerKm: 15, points: 5 },
-      'mountainous': { minPerKm: 15, maxPerKm: 25, points: 8 }
-    };
-    const targetConfig = elevationConfig[elevation as string] || elevationConfig['hilly'];
 
     while (attempt < maxAttempts) {
-      const orsResponse = await fetch(
-        `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json, application/geo+json',
-            'Authorization': OPENROUTESERVICE_API_KEY
-          },
-          body: JSON.stringify(finalRequestBody)
+      // Build URL with query parameters
+      const url = new URL('https://graphhopper.com/api/1/route');
+      Object.entries(finalParams).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => url.searchParams.append(key, String(v)));
+        } else {
+          url.searchParams.append(key, String(value));
         }
-      );
+      });
 
-      if (!orsResponse.ok) {
-        const errorText = await orsResponse.text();
-        console.error('OpenRouteService error:', orsResponse.status, errorText);
-        if ((orsResponse.status === 429 || orsResponse.status === 500 || orsResponse.status === 503) && attempt < maxAttempts - 1) {
-          console.log(`Transient ORS error ${orsResponse.status}, retrying after short delay...`);
+      const ghResponse = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!ghResponse.ok) {
+        const errorText = await ghResponse.text();
+        console.error('GraphHopper error:', ghResponse.status, errorText);
+        if ((ghResponse.status === 429 || ghResponse.status === 500 || ghResponse.status === 503) && attempt < maxAttempts - 1) {
+          console.log(`Transient GraphHopper error ${ghResponse.status}, retrying after short delay...`);
           attempt++;
           await sleep(400);
           continue;
         }
-        throw new Error(`OpenRouteService error: ${orsResponse.status}`);
+        throw new Error(`GraphHopper error: ${ghResponse.status}`);
       }
 
-      const orsData = await orsResponse.json();
-      console.log(`OpenRouteService response received (attempt ${attempt + 1}/${maxAttempts})`);
+      const ghData = await ghResponse.json();
+      console.log(`GraphHopper response received (attempt ${attempt + 1}/${maxAttempts})`);
 
-      if (!orsData.features || orsData.features.length === 0) {
-        console.error('No route features returned');
+      if (!ghData.paths || ghData.paths.length === 0) {
+        console.error('No route paths returned');
         throw new Error('Could not generate route for these coordinates');
       }
 
-      const feature = orsData.features[0];
-      const summary = feature.properties.summary;
-
-      const actualDistanceKmNum = (summary.distance / 1000);
-      const ascentProp = feature.properties?.ascent;
-      const ascentSummary = feature.properties?.summary?.ascent;
-      const actualElevationNum = typeof ascentProp === 'number'
-        ? ascentProp
-        : (typeof ascentSummary === 'number' ? ascentSummary : null);
-
-      // Calculate meters per km
-      const actualMetersPerKm = actualElevationNum !== null ? actualElevationNum / actualDistanceKmNum : 0;
+      const route = ghData.paths[0];
+      const actualDistanceKm = route.distance / 1000;
+      const actualElevation = route.ascend || 0;
 
       // Update best candidate by distance difference
       if (isLoop && typeof distance === 'number' && distance > 0) {
-        const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
+        const distanceDiff = Math.abs(actualDistanceKm - distance) / distance;
         if (distanceDiff < bestDiff) {
           bestDiff = distanceDiff;
-          bestFeature = feature;
-          bestSummary = summary;
-          bestRequestBody = JSON.parse(JSON.stringify(finalRequestBody));
+          bestRoute = route;
+          bestParams = { ...finalParams };
         }
       }
 
-      // Acceptance / adjustment logic
+      // Acceptance / adjustment logic for loops
       if (isLoop && typeof distance === 'number' && distance > 0) {
-        const distanceDiff = Math.abs(actualDistanceKmNum - distance) / distance;
+        const distanceDiff = Math.abs(actualDistanceKm - distance) / distance;
 
-        // If distance is within 5%, accept immediately (km is primary)
+        // If distance is within 5%, accept immediately
         if (distanceDiff <= 0.05) {
-          finalFeature = feature;
-          finalSummary = summary;
+          finalRoute = route;
           break;
         }
 
         // If distance is off by more than 5%, adjust it aggressively
         if (distanceDiff > 0.05) {
-          if (finalRequestBody?.options?.round_trip?.length) {
-            const currentLength = finalRequestBody.options.round_trip.length;
-            // Be more aggressive in the correction factor
-            const factor = Math.pow(distance / actualDistanceKmNum, 1.2);
-            finalRequestBody.options.round_trip.length = Math.max(1000, Math.min(300000, Math.round(currentLength * factor)));
-          }
-          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting length aggressively`);
+          const currentDistance = finalParams['round_trip.distance'];
+          // Be more aggressive in the correction factor
+          const factor = Math.pow(distance / actualDistanceKm, 1.2);
+          finalParams['round_trip.distance'] = Math.max(1000, Math.min(300000, Math.round(currentDistance * factor)));
+          console.log(`Distance off by ${(distanceDiff * 100).toFixed(1)}%, adjusting target distance`);
           attempt++;
           if (attempt < maxAttempts) continue;
         }
       }
 
       // Accept current route if no other conditions triggered
-      finalFeature = feature;
-      finalSummary = summary;
+      finalRoute = route;
       break;
     }
 
-    if (!finalFeature || !finalSummary) {
-      if (bestFeature && bestSummary) {
-        finalFeature = bestFeature;
-        finalSummary = bestSummary;
-        finalRequestBody = bestRequestBody || finalRequestBody;
+    if (!finalRoute) {
+      if (bestRoute) {
+        finalRoute = bestRoute;
+        finalParams = bestParams || finalParams;
       } else {
         throw new Error('Failed to generate a suitable route');
       }
     }
 
-    // Convert GeoJSON coordinates to lat/lng format
-    const coordinates = finalFeature.geometry.coordinates;
-    const path = coordinates.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }));
+    // Convert GraphHopper points to lat/lng format
+    const path = finalRoute.points.coordinates.map((coord: number[]) => ({ 
+      lat: coord[1], 
+      lng: coord[0] 
+    }));
 
-    // Generate GPX using the final request body
-    const gpxResponse = await fetch(
-      `https://api.openrouteservice.org/v2/directions/${profile}/gpx`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/gpx+xml',
-          'Authorization': OPENROUTESERVICE_API_KEY
-        },
-        body: JSON.stringify(finalRequestBody)
+    // Generate GPX using GraphHopper
+    const gpxUrl = new URL('https://graphhopper.com/api/1/route');
+    Object.entries(finalParams).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach(v => gpxUrl.searchParams.append(key, String(v)));
+      } else {
+        gpxUrl.searchParams.append(key, String(value));
       }
-    );
+    });
+    gpxUrl.searchParams.set('type', 'gpx');
+
+    const gpxResponse = await fetch(gpxUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/gpx+xml'
+      }
+    });
 
     let gpxData = '';
     if (gpxResponse.ok) {
@@ -235,21 +207,17 @@ serve(async (req) => {
       console.warn('Could not generate GPX, but route succeeded');
     }
 
-    const actualDistance = (finalSummary.distance / 1000).toFixed(1);
-    const ascentPropFinal = finalFeature.properties?.ascent;
-    const ascentSummaryFinal = finalFeature.properties?.summary?.ascent;
-    const actualElevation = typeof ascentPropFinal === 'number'
-      ? Math.round(ascentPropFinal)
-      : (typeof ascentSummaryFinal === 'number' ? Math.round(ascentSummaryFinal) : null);
+    const actualDistance = (finalRoute.distance / 1000).toFixed(1);
+    const actualElevation = Math.round(finalRoute.ascend || 0);
 
-    console.log(`Route generated - Requested: ${distance}km/${elevation}m, Actual: ${actualDistance}km/${actualElevation ?? 'n/a'}m`);
+    console.log(`Route generated - Requested: ${distance}km/${elevation}, Actual: ${actualDistance}km/${actualElevation}m`);
 
     return new Response(
       JSON.stringify({
         path,
         distance: actualDistance,
         elevation: actualElevation,
-        duration: Math.round(finalSummary.duration / 60),
+        duration: Math.round(finalRoute.time / 1000 / 60), // Convert ms to minutes
         gpxData,
         requestedDistance: distance,
         requestedElevation: elevation

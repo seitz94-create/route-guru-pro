@@ -40,18 +40,24 @@ serve(async (req) => {
       // For loop routes, use round_trip with user's preferred distance
       const targetDistance = distance ? distance * 1000 : 50000; // Convert km to meters
       
+      // Adjust route complexity based on elevation preference
+      // Higher elevation preference = more waypoints = more varied/hilly route
+      const points = elevation ? Math.min(Math.max(Math.floor(elevation / 200) + 3, 3), 10) : 3;
+      
       requestBody = {
         coordinates: [[startCoords.lng, startCoords.lat]],
         options: {
           round_trip: {
             length: targetDistance,
-            points: 3,
+            points: points,
             seed: Math.floor(Math.random() * 100)
           }
         },
         elevation: true,
         instructions: true
       };
+      
+      console.log(`Using ${points} waypoints for elevation preference: ${elevation}m`);
       
       // Add direction preference if specified
       if (direction && direction !== 'none') {
@@ -139,13 +145,20 @@ serve(async (req) => {
       console.warn('Could not generate GPX, but route succeeded');
     }
 
+    const actualDistance = (summary.distance / 1000).toFixed(1);
+    const actualElevation = Math.round(summary.ascent);
+    
+    console.log(`Route generated - Requested: ${distance}km/${elevation}m, Actual: ${actualDistance}km/${actualElevation}m`);
+
     return new Response(
       JSON.stringify({
         path,
-        distance: (summary.distance / 1000).toFixed(1), // Convert to km
-        elevation: Math.round(summary.ascent), // Elevation gain in meters
+        distance: actualDistance, // Convert to km
+        elevation: actualElevation, // Elevation gain in meters
         duration: Math.round(summary.duration / 60), // Convert to minutes
-        gpxData
+        gpxData,
+        requestedDistance: distance,
+        requestedElevation: elevation
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

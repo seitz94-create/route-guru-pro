@@ -32,8 +32,15 @@ serve(async (req) => {
       "highlights": ["Point 1", "Point 2", "Point 3"],
       "safetyNotes": "Important safety considerations",
       "startPoint": "Starting location name",
-      "terrain": "road" | "gravel" | "mtb" | "mixed"
+      "terrain": "road" | "gravel" | "mtb" | "mixed",
+      "coordinates": {
+        "lat": number (latitude, e.g., 55.6761 for Copenhagen),
+        "lng": number (longitude, e.g., 12.5683 for Copenhagen)
+      }
     }
+    
+    IMPORTANT: Include realistic GPS coordinates (latitude and longitude) for the starting point of each route.
+    Make sure coordinates match the location and country mentioned in user profile or route description.
     
     Only return valid JSON array, no markdown formatting.`;
 

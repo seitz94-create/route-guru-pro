@@ -15,6 +15,10 @@ interface Route {
   safetyNotes: string;
   startPoint: string;
   terrain: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 interface RouteCardProps {
@@ -45,8 +49,10 @@ const RouteCard = ({ route }: RouteCardProps) => {
     toast.info(`${device} integration coming soon! This will sync directly to your device.`);
   };
 
-  // Generate static map URL (using OpenStreetMap static map)
-  const mapUrl = `https://via.placeholder.com/400x200/1a1a1a/ffffff?text=${encodeURIComponent(route.name)}`;
+  // Generate static map URL using OpenStreetMap tiles
+  const mapUrl = route.coordinates 
+    ? `https://staticmap.openstreetmap.de/staticmap.php?center=${route.coordinates.lat},${route.coordinates.lng}&zoom=13&size=400x200&maptype=mapnik&markers=${route.coordinates.lat},${route.coordinates.lng},red`
+    : `https://via.placeholder.com/400x200/1a1a1a/ffffff?text=${encodeURIComponent(route.name)}`;
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">

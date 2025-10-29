@@ -80,13 +80,17 @@ const Routes = () => {
     const normalizeLocation = (loc: string) => {
       const base = String(loc || '').trim();
       if (!base) return base;
-      if (base.includes(',')) return base; // already has components
+      const hasCountry = /(?:denmark|danmark)/i.test(base);
+      if (base.includes(',')) {
+        // Ensure country is present even when address already has components
+        return hasCountry ? base : `${base}, Denmark`;
+      }
       const tokens = base.split(/\s+/).filter(Boolean);
       if (tokens.length >= 2) {
         const lastTwo = tokens.slice(-2).join(' ');
-        return /denmark|danmark/i.test(base) ? lastTwo : `${lastTwo}, Denmark`;
+        return hasCountry ? lastTwo : `${lastTwo}, Denmark`;
       }
-      return /denmark|danmark/i.test(base) ? base : `${base}, Denmark`;
+      return hasCountry ? base : `${base}, Denmark`;
     };
 
     const startForApi = normalizeLocation(finalStartLocation);
@@ -120,7 +124,12 @@ const Routes = () => {
       if (error) throw error;
 
       if (data.error) {
-        toast.error(data.error);
+        const msg = String(data.error);
+        if (/start location/i.test(msg)) {
+          toast.error('Kunne ikke finde startsted. Prøv en større by eller tilføj ", Denmark".');
+        } else {
+          toast.error(msg);
+        }
         return;
       }
 

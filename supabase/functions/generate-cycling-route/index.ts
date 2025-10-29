@@ -12,14 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { startCoords, endCoords, terrain, distance, elevation, direction, routeType } = await req.json();
+    const { startCoords, endCoords, terrain, distance, elevation, direction, routeType, startLocation, endLocation } = await req.json();
     const OPENROUTESERVICE_API_KEY = Deno.env.get('OPENROUTESERVICE_API_KEY');
     
     if (!OPENROUTESERVICE_API_KEY) {
       throw new Error('OPENROUTESERVICE_API_KEY is not configured');
     }
 
-    console.log('Generating route with:', { startCoords, endCoords, terrain, distance, direction, routeType });
+    console.log('Generating route with:', { startCoords, endCoords, terrain, distance, direction, routeType, startLocation, endLocation });
 
     // Map terrain type to OpenRouteService profile
     const profileMap: Record<string, string> = {

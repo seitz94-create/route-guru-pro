@@ -19,86 +19,53 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const systemPrompt = `You are a geocoding and route planning assistant. Your job is to convert user location names to GPS coordinates.
-    
-    Return a JSON object with the following structure:
-    {
-      "startCoords": {
-        "lat": number,
-        "lng": number
-      },
-      "endCoords": {
-        "lat": number,
-        "lng": number
-      },
-      "startPointName": "Actual city/location name",
-      "endPointName": "Actual city/location name"
-    }
-    
-    CRITICAL REQUIREMENTS:
-    - Convert the user's start and end location names to accurate GPS coordinates
-    - Use real Danish cities/towns with good cycling infrastructure
-    - Coordinates MUST be at city centers or well-known starting points with actual roads
-    - Do NOT use coordinates in water, fields, or areas without roads
-    - If user's location is vague, use the nearest major town
-    - Common Danish cycling cities: København (55.6761, 12.5683), Aarhus (56.1629, 10.2039), Odense (55.4038, 10.4024), Roskilde (55.6415, 12.0803)
-    
-    Only return valid JSON, no markdown formatting.`;
-
     const isLoop = preferences.routeType === 'loop' || !preferences.endLocation;
     
-    const userPrompt = `Convert these locations to GPS coordinates:
-    Start location: ${preferences.startLocation}
-    End location: ${isLoop ? preferences.startLocation : preferences.endLocation}
-    
-    These locations are in Denmark.`;
+    console.log('Geocoding start location:', preferences.startLocation);
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Geocode start location using Nominatim
+    const startGeoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-location`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
+        'Authorization': req.headers.get('Authorization') || '',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-      }),
+        location: preferences.startLocation
+      })
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'Credits exhausted. Please add credits to continue.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      throw new Error(`AI Gateway error: ${response.status}`);
+    if (!startGeoResponse.ok) {
+      throw new Error('Could not find start location');
     }
 
-    const data = await response.json();
-    let aiResponse = data.choices[0].message.content;
-    
-    // Clean up markdown formatting if present
-    aiResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
-    // Parse coordinates from AI
-    const locationData = JSON.parse(aiResponse);
-    
-    console.log('AI geocoded locations:', locationData);
+    const startGeoData = await startGeoResponse.json();
+    console.log('Start location geocoded:', startGeoData);
+
+    let endGeoData = startGeoData; // Default to same as start for loops
+
+    // Geocode end location if point-to-point
+    if (!isLoop && preferences.endLocation) {
+      console.log('Geocoding end location:', preferences.endLocation);
+      
+      const endGeoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-location`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.get('Authorization') || '',
+        },
+        body: JSON.stringify({
+          location: preferences.endLocation
+        })
+      });
+
+      if (!endGeoResponse.ok) {
+        throw new Error('Could not find end location');
+      }
+
+      endGeoData = await endGeoResponse.json();
+      console.log('End location geocoded:', endGeoData);
+    }
 
     // Call OpenRouteService to generate the actual route
     const routeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-cycling-route`, {
@@ -108,13 +75,15 @@ serve(async (req) => {
         'Authorization': req.headers.get('Authorization') || '',
       },
       body: JSON.stringify({
-        startCoords: locationData.startCoords,
-        endCoords: locationData.endCoords,
+        startCoords: startGeoData.coords,
+        endCoords: endGeoData.coords,
         terrain: preferences.terrain,
         distance: preferences.distance,
         elevation: preferences.elevation,
         direction: preferences.direction,
-        routeType: preferences.routeType
+        routeType: preferences.routeType,
+        startLocation: preferences.startLocation,
+        endLocation: preferences.endLocation
       })
     });
 
@@ -128,18 +97,18 @@ serve(async (req) => {
     
     // Return single route with all data
     const route = {
-      name: `${locationData.startPointName}${isLoop ? ' Loop' : ` til ${locationData.endPointName}`}`,
-      description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction ? ` mod ${preferences.direction}` : ''}`,
+      name: `${preferences.startLocation}${isLoop ? ' Loop' : ` til ${preferences.endLocation}`}`,
+      description: `En ${preferences.terrain} rute på ca. ${preferences.distance}km${preferences.direction && preferences.direction !== 'none' ? ` mod ${preferences.direction}` : ''}`,
       distance: parseFloat(routeData.distance),
       elevation: routeData.elevation,
       difficulty: preferences.distance < 30 ? 'Easy' : preferences.distance < 60 ? 'Moderate' : 'Hard',
       estimatedTime: `${Math.round(routeData.duration / 60)} timer`,
-      highlights: routeData.highlights || [`Start: ${locationData.startPointName}`, `Distance: ${routeData.distance}km`, `Elevation: ${routeData.elevation}m`],
+      highlights: routeData.highlights || [`Start: ${startGeoData.displayName}`, `Distance: ${routeData.distance}km`, `Elevation: ${routeData.elevation}m`],
       safetyNotes: 'Vær opmærksom på trafik og vejrforhold',
-      startPoint: locationData.startPointName,
+      startPoint: startGeoData.displayName,
       terrain: preferences.terrain,
       path: routeData.path,
-      coordinates: locationData.startCoords,
+      coordinates: startGeoData.coords,
       gpxData: routeData.gpxData
     };
     
